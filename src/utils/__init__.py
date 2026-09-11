@@ -1,0 +1,2 @@
+# utils package
+from .config import RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR, RATINGS_FILE, MOVIES_FILE
