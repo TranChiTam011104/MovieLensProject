@@ -1,0 +1,736 @@
+openapi: 3.0.3
+info:
+  title: MovieLens Recommendation API
+  description: |
+    API for movie recommendations based on collaborative filtering.
+    
+    ## Overview
+    This API provides personalized movie recommendations for users based on
+    the SVD (Singular Value Decomposition) algorithm trained on MovieLens 100K dataset.
+    
+    ## Authentication
+    Currently no authentication required (for internal use).
+    
+    ## Rate Limiting
+    - 100 requests per minute per IP
+    - 429 status code returned when limit exceeded
+  version: 1.0.0
+  contact:
+    name: AI In Action Team
+    email: team@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com/v1
+    description: Production server
+
+tags:
+  - name: Health
+    description: Service health check
+  - name: Recommendations
+    description: ML-based movie recommendation endpoints (SVD Collaborative Filtering)
+  - name: Predictions
+    description: ML-based rating prediction endpoints (SVD)
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Returns the health status of the API service.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+                version: 1.0.0
+                timestamp: '2026-09-11T15:00:00Z'
+
+  /v1/recommend/{user_id}:
+    get:
+      tags:
+        - Recommendations
+      summary: Get movie recommendations for a user
+      description: |
+        Returns a list of personalized movie recommendations for the specified user.
+        
+        The recommendations are based on:
+        - User's rating history
+        - Similar users' preferences (collaborative filtering)
+        - Movie popularity and ratings
+        
+        Recommendations are sorted by predicted score (highest first).
+      operationId: getRecommendations
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The unique identifier of the user
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 943
+            example: 42
+        - name: n
+          in: query
+          required: false
+          description: Number of recommendations to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          example: 10
+        - name: exclude_watched
+          in: query
+          required: false
+          description: Exclude movies the user has already rated
+          schema:
+            type: boolean
+            default: true
+        - name: min_rating
+          in: query
+          required: false
+          description: Minimum predicted rating threshold
+          schema:
+            type: number
+            minimum: 0
+            maximum: 5
+            default: 0
+          example: 3.5
+      responses:
+        '200':
+          description: Successful recommendation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+              examples:
+                standard:
+                  summary: Standard request
+                  value:
+                    user_id: 42
+                    n_recommendations: 10
+                    recommendations:
+                      - movie_id: 318
+                        title: Shawshank Redemption, The (1994)
+                        genre: ['Drama']
+                        predicted_rating: 4.82
+                        confidence: 0.95
+                      - movie_id: 356
+                        title: Forrest Gump (1994)
+                        genre: ['Comedy', 'Drama', 'Romance']
+                        predicted_rating: 4.71
+                        confidence: 0.92
+                noRecommendations:
+                  summary: No recommendations available
+                  value:
+                    user_id: 999
+                    n_recommendations: 0
+                    recommendations: []
+                    message: User has rated all available movies
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: user_not_found
+                message: User with ID 9999 does not exist
+                status_code: 404
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: rate_limit_exceeded
+                message: Too many requests. Please try again later.
+                retry_after: 60
+
+  /v1/predict/{user_id}/{movie_id}:
+    get:
+      tags:
+        - Predictions
+      summary: Predict rating for a specific movie
+      description: |
+        Predicts how a user would rate a specific movie.
+        
+        Returns the predicted rating on a scale of 1-5 stars.
+      operationId: predictRating
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The unique identifier of the user
+          schema:
+            type: integer
+            minimum: 1
+            example: 42
+        - name: movie_id
+          in: path
+          required: true
+          description: The unique identifier of the movie
+          schema:
+            type: integer
+            minimum: 1
+            example: 318
+      responses:
+        '200':
+          description: Successful prediction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionResponse'
+              example:
+                user_id: 42
+                movie_id: 318
+                predicted_rating: 4.82
+                confidence: 0.95
+                actual_rating: null
+        '404':
+          description: User or movie not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/movies/{movie_id}:
+    get:
+      tags:
+        - Recommendations
+      summary: Get movie details
+      description: Returns detailed information about a specific movie.
+      operationId: getMovieDetails
+      parameters:
+        - name: movie_id
+          in: path
+          required: true
+          description: The unique identifier of the movie
+          schema:
+            type: integer
+            minimum: 1
+            example: 318
+      responses:
+        '200':
+          description: Movie details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovieDetails'
+              example:
+                movie_id: 318
+                title: Shawshank Redemption, The (1994)
+                genres: ['Crime', 'Drama']
+                release_year: 1994
+                avg_rating: 4.53
+                n_ratings: 452
+        '404':
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/movies/{movie_id}/similar:
+    get:
+      tags:
+        - Recommendations
+      summary: Get similar movies (Item-based Collaborative Filtering)
+      description: |
+        Returns a list of movies similar to the specified movie.
+        
+        Similarity is computed using the SVD model's latent factors:
+        - Extract the movie's factor vector from SVD
+        - Compute cosine similarity with all other movies
+        - Return top-N most similar movies
+        
+        This endpoint uses **Item-based Collaborative Filtering** on SVD latent space.
+      operationId: getSimilarMovies
+      parameters:
+        - name: movie_id
+          in: path
+          required: true
+          description: The unique identifier of the reference movie
+          schema:
+            type: integer
+            minimum: 1
+            example: 318
+        - name: n
+          in: query
+          required: false
+          description: Number of similar movies to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          example: 10
+        - name: min_similarity
+          in: query
+          required: false
+          description: Minimum similarity score threshold (0-1)
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0
+          example: 0.5
+      responses:
+        '200':
+          description: Similar movies found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarMoviesResponse'
+              examples:
+                standard:
+                  summary: Standard request
+                  value:
+                    movie_id: 318
+                    title: Shawshank Redemption, The (1994)
+                    n_similar: 10
+                    similar_movies:
+                      - movie_id: 279
+                        title: Green Mile, The (1999)
+                        genres: ['Crime', 'Drama', 'Fantasy']
+                        similarity_score: 0.92
+                        avg_rating: 4.33
+                      - movie_id: 427
+                        title: Fugitive, The (1993)
+                        genres: ['Thriller']
+                        similarity_score: 0.87
+                        avg_rating: 4.25
+                lowSimilarity:
+                  summary: No highly similar movies found
+                  value:
+                    movie_id: 9999
+                    title: Unknown Movie
+                    n_similar: 0
+                    similar_movies: []
+                    message: No movies meet the minimum similarity threshold
+        '404':
+          description: Movie not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/users/{user_id}/similar:
+    get:
+      tags:
+        - Recommendations
+      summary: Get similar users (User-based Collaborative Filtering)
+      description: |
+        Returns a list of users with similar preferences to the specified user.
+        
+        Similarity is computed using the SVD model's latent factors:
+        - Extract the user's factor vector from SVD
+        - Compute cosine similarity with all other users
+        - Return top-N most similar users
+        
+        This endpoint uses **User-based Collaborative Filtering** on SVD latent space.
+        Useful for community insights and understanding user clusters.
+      operationId: getSimilarUsers
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The unique identifier of the reference user
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 943
+            example: 42
+        - name: n
+          in: query
+          required: false
+          description: Number of similar users to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          example: 10
+        - name: min_similarity
+          in: query
+          required: false
+          description: Minimum similarity score threshold (0-1)
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0
+          example: 0.3
+      responses:
+        '200':
+          description: Similar users found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimilarUsersResponse'
+              examples:
+                standard:
+                  summary: Standard request
+                  value:
+                    user_id: 42
+                    n_similar: 10
+                    similar_users:
+                      - user_id: 156
+                        similarity_score: 0.89
+                        common_ratings: 145
+                        top_common_genres: ['Drama', 'Thriller']
+                      - user_id: 287
+                        similarity_score: 0.82
+                        common_ratings: 98
+                        top_common_genres: ['Drama', 'Comedy']
+                lowSimilarity:
+                  summary: Few similar users found
+                  value:
+                    user_id: 999
+                    n_similar: 3
+                    similar_users:
+                      - user_id: 445
+                        similarity_score: 0.35
+                        common_ratings: 12
+                        top_common_genres: ['Drama']
+                    message: Limited similar users found for this user
+
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: healthy
+        version:
+          type: string
+          example: '1.0.0'
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-09-11T15:00:00Z'
+
+    RecommendationResponse:
+      type: object
+      required:
+        - user_id
+        - n_recommendations
+        - recommendations
+      properties:
+        user_id:
+          type: integer
+          description: The user ID requested
+          example: 42
+        n_recommendations:
+          type: integer
+          description: Number of recommendations returned
+          example: 10
+        recommendations:
+          type: array
+          description: List of recommended movies
+          items:
+            $ref: '#/components/schemas/MovieRecommendation'
+        message:
+          type: string
+          description: Optional message (e.g., when no recommendations available)
+          example: User has rated all available movies
+
+    MovieRecommendation:
+      type: object
+      required:
+        - movie_id
+        - title
+        - predicted_rating
+      properties:
+        movie_id:
+          type: integer
+          description: Unique movie identifier
+          example: 318
+        title:
+          type: string
+          description: Movie title with year
+          example: 'Shawshank Redemption, The (1994)'
+        genres:
+          type: array
+          items:
+            type: string
+          description: List of movie genres
+          example: ['Drama', 'Crime']
+        predicted_rating:
+          type: number
+          format: float
+          minimum: 1
+          maximum: 5
+          description: Predicted rating (1-5 stars)
+          example: 4.82
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Model confidence score
+          example: 0.95
+
+    PredictionResponse:
+      type: object
+      required:
+        - user_id
+        - movie_id
+        - predicted_rating
+      properties:
+        user_id:
+          type: integer
+          example: 42
+        movie_id:
+          type: integer
+          example: 318
+        predicted_rating:
+          type: number
+          format: float
+          minimum: 1
+          maximum: 5
+          description: Predicted rating on 1-5 scale
+          example: 4.82
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Prediction confidence
+          example: 0.95
+        actual_rating:
+          type: number
+          nullable: true
+          description: User's actual rating if exists in training data
+          example: null
+
+    MovieDetails:
+      type: object
+      required:
+        - movie_id
+        - title
+      properties:
+        movie_id:
+          type: integer
+          example: 318
+        title:
+          type: string
+          example: 'Shawshank Redemption, The (1994)'
+        genres:
+          type: array
+          items:
+            type: string
+          example: ['Crime', 'Drama']
+        release_year:
+          type: integer
+          nullable: true
+          example: 1994
+        avg_rating:
+          type: number
+          format: float
+          example: 4.53
+        n_ratings:
+          type: integer
+          description: Number of ratings for this movie
+          example: 452
+
+    SimilarMoviesResponse:
+      type: object
+      required:
+        - movie_id
+        - n_similar
+        - similar_movies
+      properties:
+        movie_id:
+          type: integer
+          description: Reference movie ID
+          example: 318
+        title:
+          type: string
+          description: Reference movie title
+          example: 'Shawshank Redemption, The (1994)'
+        n_similar:
+          type: integer
+          description: Number of similar movies returned
+          example: 10
+        similar_movies:
+          type: array
+          description: List of similar movies
+          items:
+            $ref: '#/components/schemas/SimilarMovie'
+        message:
+          type: string
+          description: Optional message
+          example: No movies meet the minimum similarity threshold
+
+    SimilarMovie:
+      type: object
+      required:
+        - movie_id
+        - title
+        - similarity_score
+      properties:
+        movie_id:
+          type: integer
+          description: Similar movie identifier
+          example: 279
+        title:
+          type: string
+          description: Movie title with year
+          example: 'Green Mile, The (1999)'
+        genres:
+          type: array
+          items:
+            type: string
+          description: Movie genres
+          example: ['Crime', 'Drama', 'Fantasy']
+        similarity_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Cosine similarity score (higher = more similar)
+          example: 0.92
+        avg_rating:
+          type: number
+          format: float
+          description: Average rating from users
+          example: 4.33
+
+    SimilarUsersResponse:
+      type: object
+      required:
+        - user_id
+        - n_similar
+        - similar_users
+      properties:
+        user_id:
+          type: integer
+          description: Reference user ID
+          example: 42
+        n_similar:
+          type: integer
+          description: Number of similar users returned
+          example: 10
+        similar_users:
+          type: array
+          description: List of similar users
+          items:
+            $ref: '#/components/schemas/SimilarUser'
+        message:
+          type: string
+          description: Optional message
+          example: Limited similar users found for this user
+
+    SimilarUser:
+      type: object
+      required:
+        - user_id
+        - similarity_score
+      properties:
+        user_id:
+          type: integer
+          description: Similar user identifier
+          example: 156
+        similarity_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Cosine similarity score (higher = more similar)
+          example: 0.89
+        common_ratings:
+          type: integer
+          description: Number of movies both users have rated
+          example: 145
+        top_common_genres:
+          type: array
+          items:
+            type: string
+          description: Genres both users frequently rate highly
+          example: ['Drama', 'Thriller']
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - status_code
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: user_not_found
+        message:
+          type: string
+          description: Human-readable error message
+          example: User with ID 9999 does not exist
+        status_code:
+          type: integer
+          description: HTTP status code
+          example: 404
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - message
+        - status_code
+        - details
+      properties:
+        error:
+          type: string
+          example: validation_error
+        message:
+          type: string
+          example: Invalid request parameters
+        status_code:
+          type: integer
+          example: 422
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: user_id
+              issue:
+                type: string
+                example: must be greater than or equal to 1
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (if enabled)
