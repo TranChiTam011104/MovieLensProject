@@ -1,0 +1,20 @@
+# Deployment Configuration
+deployment:
+  strategy: "canary"  # shadow, canary, blue_green
+  
+aws:
+  region: "us-east-1"
+  s3_bucket: "movielens-models"
+  ecr_repo: "movielens-api"
+  
+ec2:
+  instance_type: "t2.micro"
+  ami_id: "ami-0c55b159cbfafe1f0"
+  
+lambda:
+  memory: 512
+  timeout: 30
+  
+model_registry:
+  path: "s3://movielens-models/registry/"
+  mlflow_tracking_uri: "http://localhost:5000"

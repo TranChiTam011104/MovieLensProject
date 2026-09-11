@@ -1,0 +1,17 @@
+# Model Configuration
+model:
+  name: "surprise_baseline"
+  algorithm: "SVD"  # SVD, KNNBasic, or BaselineOnly
+  n_factors: 100
+  n_epochs: 20
+  lr_all: 0.005
+  reg_all: 0.02
+
+training:
+  test_size: 0.2
+  random_state: 42
+
+data:
+  dataset: "ml-100k"
+  data_path: "data/raw/ml-100k/"
+  processed_path: "data/processed/"
