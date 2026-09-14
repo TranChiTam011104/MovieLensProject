@@ -1,0 +1,23 @@
+$kind: http-request
+description: |-
+  **Tìm users tương tự user 42 với similarity >= 0.7**
+
+  Endpoint: `/v1/users/{user_id}/similar?min_similarity=0.7`
+url: "{{baseUrl}}/v1/users/42/similar?min_similarity=0.7"
+method: GET
+queryParams:
+  min_similarity: "0.7"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('All similarities meet threshold', function() {
+          var jsonData = pm.response.json();
+          jsonData.similar_users.forEach(function(user) {
+              pm.expect(user.similarity_score).to.be.at.least(0.7);
+          });
+      });
+order: 3000

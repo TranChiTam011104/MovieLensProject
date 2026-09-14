@@ -1,0 +1,19 @@
+$kind: http-request
+description: |-
+  **Test lỗi: N vượt quá giới hạn**
+
+  Endpoint: `/v1/recommend/users/{user_id}?n=100`
+
+  **Kịch bản:** n=100 trong khi giới hạn tối đa là 50
+  **Response mong đợi:** 422 Unprocessable Entity
+url: "{{baseUrl}}/v1/recommend/users/42?n=100"
+method: GET
+queryParams:
+  n: "100"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 422', function() {
+          pm.response.to.have.status(422);
+      });
+order: 9000

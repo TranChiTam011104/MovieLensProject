@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Kiểm tra trạng thái hoạt động của API.
+
+  **Response:** status, version, timestamp
+
+  **Use case:** Load balancer health check, CI/CD verification
+url: "{{baseUrl}}/health"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has status healthy', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql('healthy');
+      });
+
+      pm.test('Response has version', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('version');
+      });
+
+      pm.test('Response has timestamp', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('timestamp');
+      });
+order: 1000

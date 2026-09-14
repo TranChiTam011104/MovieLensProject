@@ -1,0 +1,15 @@
+$kind: http-request
+name: "Step 1: Get Recommendations for User 42"
+url: "{{baseUrl}}/v1/recommend/users/42?n=5"
+method: GET
+queryParams:
+  n: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Get recommendations', function() {
+          pm.response.to.have.status(200);
+          var jsonData = pm.response.json();
+          pm.globals.set('first_recommended_movie_id', jsonData.recommendations[0].movie_id);
+      });
+order: 1000

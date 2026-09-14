@@ -1,0 +1,21 @@
+$kind: http-request
+description: |-
+  **Tìm top 5 users tương tự user 42**
+
+  Endpoint: `/v1/users/{user_id}/similar?n=5`
+url: "{{baseUrl}}/v1/users/42/similar?n=5"
+method: GET
+queryParams:
+  n: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Returns at most 5 similar users', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.similar_users.length).to.be.at.most(5);
+      });
+order: 2000

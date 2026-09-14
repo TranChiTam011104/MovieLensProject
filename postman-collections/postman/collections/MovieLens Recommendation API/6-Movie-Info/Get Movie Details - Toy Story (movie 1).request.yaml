@@ -1,0 +1,19 @@
+$kind: http-request
+description: |-
+  **Lấy thông tin chi tiết movie 1 (Toy Story)**
+
+  Endpoint: `/v1/movies/{movie_id}`
+url: "{{baseUrl}}/v1/movies/1"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Movie ID is 1', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.movie_id).to.eql(1);
+      });
+order: 2000

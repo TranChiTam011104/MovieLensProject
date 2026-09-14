@@ -53,7 +53,7 @@ paths:
                 version: 1.0.0
                 timestamp: '2026-09-11T15:00:00Z'
 
-  /v1/recommend/{user_id}:
+  /v1/recommend/users/{user_id}:
     get:
       tags:
         - Recommendations
@@ -121,7 +121,7 @@ paths:
                     recommendations:
                       - movie_id: 318
                         title: Shawshank Redemption, The (1994)
-                        genre: ['Drama']
+                        genres: ['Drama']
                         predicted_rating: 4.82
                         confidence: 0.95
                       - movie_id: 356
@@ -163,7 +163,7 @@ paths:
                 message: Too many requests. Please try again later.
                 retry_after: 60
 
-  /v1/predict/{user_id}/{movie_id}:
+  /v1/predict/users/{user_id}/movies/{movie_id}:
     get:
       tags:
         - Predictions

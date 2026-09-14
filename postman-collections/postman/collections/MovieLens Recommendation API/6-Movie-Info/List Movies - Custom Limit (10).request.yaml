@@ -1,0 +1,18 @@
+$kind: http-request
+description: List first 10 movies.
+url: "{{baseUrl}}/v1/movies?limit=10"
+method: GET
+queryParams:
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Returns at most 10 movies', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.length).to.be.at.most(10);
+      });
+order: 5000

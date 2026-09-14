@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  **Test lỗi: Movie ID không hợp lệ**
+
+  Endpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`
+
+  **Kịch bản:** Movie ID = 0 không hợp lệ (phải >= 1)
+  **Response mong đợi:** 422 Unprocessable Entity
+url: "{{baseUrl}}/v1/predict/users/42/movies/0"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 422', function() {
+          pm.response.to.have.status(422);
+      });
+order: 5000

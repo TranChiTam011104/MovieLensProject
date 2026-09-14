@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  **Test lỗi: User không tồn tại**
+
+  Endpoint: `/v1/users/{user_id}/similar`
+
+  **Kịch bản:** User 9999 không tồn tại
+  **Response mong đợi:** 404 Not Found
+url: "{{baseUrl}}/v1/users/9999/similar"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 404', function() {
+          pm.response.to.have.status(404);
+      });
+order: 5000

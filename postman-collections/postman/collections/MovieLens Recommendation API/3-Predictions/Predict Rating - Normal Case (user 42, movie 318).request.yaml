@@ -1,0 +1,40 @@
+$kind: http-request
+description: |-
+  **Dự đoán rating của user 42 cho movie 318**
+
+  Endpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`
+
+  **Ý nghĩa:** Movie 318 là The Shawshank Redemption - dự đoán xem user 42 sẽ đánh giá phim này bao nhiêu sao (1-5).
+
+  **Response:** predicted_rating, confidence
+url: "{{baseUrl}}/v1/predict/users/42/movies/318"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has predicted_rating', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('predicted_rating');
+      });
+
+      pm.test('Rating is within valid range', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.predicted_rating).to.be.within(1, 5);
+      });
+
+      pm.test('Response has confidence', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('confidence');
+          pm.expect(jsonData.confidence).to.be.within(0, 1);
+      });
+
+      pm.test('User and movie IDs match', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.user_id).to.eql(42);
+          pm.expect(jsonData.movie_id).to.eql(318);
+      });
+order: 1000

@@ -1,0 +1,19 @@
+$kind: http-request
+description: List 5 movies starting from offset 10.
+url: "{{baseUrl}}/v1/movies?limit=5&offset=10"
+method: GET
+queryParams:
+  limit: "5"
+  offset: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Returns exactly 5 movies', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.length).to.eql(5);
+      });
+order: 6000

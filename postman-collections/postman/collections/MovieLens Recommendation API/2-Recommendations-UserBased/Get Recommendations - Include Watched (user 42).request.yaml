@@ -1,0 +1,18 @@
+$kind: http-request
+description: |-
+  **Gợi ý phim cho user 42 (bao gồm phim đã xem)**
+
+  Endpoint: `/v1/recommend/{user_id}?exclude_watched=false`
+
+  **Ý nghĩa:** Trả về cả những phim user đã đánh giá, kèm predicted rating.
+url: "{{baseUrl}}/v1/recommend/users/42?exclude_watched=false"
+method: GET
+queryParams:
+  exclude_watched: "false"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+order: 3000

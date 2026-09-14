@@ -1,0 +1,39 @@
+$kind: http-request
+description: |-
+  **Tìm phim tương tự movie 318 (The Shawshank Redemption)**
+
+  Endpoint: `/v1/movies/{movie_id}/similar`
+
+  **Ý nghĩa:** Sử dụng Item-based CF để tìm những phim có đặc trưng latent factors tương tự Shawshank.
+url: "{{baseUrl}}/v1/movies/318/similar"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has similar_movies array', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('similar_movies');
+          pm.expect(jsonData.similar_movies).to.be.an('array');
+      });
+
+      pm.test('Similar movies have similarity scores', function() {
+          var jsonData = pm.response.json();
+          if (jsonData.similar_movies.length > 0) {
+              var sim = jsonData.similar_movies[0];
+              pm.expect(sim).to.have.property('similarity_score');
+              pm.expect(sim.similarity_score).to.be.within(0, 1);
+          }
+      });
+
+      pm.test('Movie IDs are valid', function() {
+          var jsonData = pm.response.json();
+          jsonData.similar_movies.forEach(function(movie) {
+              pm.expect(movie.movie_id).to.be.a('number');
+              pm.expect(movie.movie_id).to.not.eql(318); // Should not include itself
+          });
+      });
+order: 1000

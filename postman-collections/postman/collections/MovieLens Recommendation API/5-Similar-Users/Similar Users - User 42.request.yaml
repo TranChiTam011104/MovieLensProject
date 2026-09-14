@@ -1,0 +1,41 @@
+$kind: http-request
+description: |-
+  **Tìm users có sở thích giống user 42**
+
+  Endpoint: `/v1/users/{user_id}/similar`
+
+  **Ý nghĩa:** Sử dụng User-based CF để tìm users có vector latent factors tương tự user 42.
+url: "{{baseUrl}}/v1/users/42/similar"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has similar_users array', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('similar_users');
+          pm.expect(jsonData.similar_users).to.be.an('array');
+      });
+
+      pm.test('Similar users have required fields', function() {
+          var jsonData = pm.response.json();
+          if (jsonData.similar_users.length > 0) {
+              var user = jsonData.similar_users[0];
+              pm.expect(user).to.have.property('user_id');
+              pm.expect(user).to.have.property('similarity_score');
+              pm.expect(user).to.have.property('common_ratings');
+              pm.expect(user.user_id).to.not.eql(42); // Should not include self
+          }
+      });
+
+      pm.test('Similarity scores are valid', function() {
+          var jsonData = pm.response.json();
+          jsonData.similar_users.forEach(function(user) {
+              pm.expect(user.similarity_score).to.be.within(0, 1);
+              pm.expect(user.common_ratings).to.be.at.least(0);
+          });
+      });
+order: 1000

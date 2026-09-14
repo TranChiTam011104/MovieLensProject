@@ -8,7 +8,7 @@ API cung cấp các endpoint dựa trên **SVD (Singular Value Decomposition)** 
 
 ## 🎯 ML-Based Endpoints
 
-### 1. `GET /v1/recommend/{user_id}`
+### 1. `GET /v1/recommend/users/{user_id}`
 
 **Mục đích:** Gợi ý phim cá nhân hóa cho 1 user
 
@@ -37,7 +37,7 @@ API cung cấp các endpoint dựa trên **SVD (Singular Value Decomposition)** 
 
 ---
 
-### 2. `GET /v1/predict/{user_id}/{movie_id}`
+### 2. `GET /v1/predict/users/{user_id}/movies/{movie_id}`
 
 **Mục đích:** Dự đoán rating cho 1 user - 1 phim cụ thể
 
@@ -185,12 +185,12 @@ return top-N by similarity
 │  🎬 TRANG CHI TIẾT PHIM                                                    │
 │     ├── /v1/movies/{id}          → Thông tin phim                          │
 │     ├── /v1/movies/{id}/similar  → "Phim tương tự"                         │
-│     └── /v1/predict/{uid}/{mid} → "Bạn sẽ thích bao nhiêu?"               │
+│     ├── /v1/predict/users/{uid}/movies/{mid} → "Bạn sẽ thích bao nhiêu?"               │
 │                                                                             │
 │  ─────────────────────────────────────────────────────────────────────────  │
 │                                                                             │
 │  🏠 TRANG CHỦ / DASHBOARD                                                  │
-│     ├── /v1/recommend/{uid}     → "Phim dành cho bạn"                       │
+│     ├── /v1/recommend/users/{uid}  → "Phim dành cho bạn"                       │
 │     └── /v1/users/{uid}/similar → "Users cùng gu với bạn"                 │
 │                                                                             │
 │  ─────────────────────────────────────────────────────────────────────────  │
@@ -207,8 +207,8 @@ return top-N by similarity
 
 | Endpoint | Method | ML Model | Main Use Case |
 |----------|--------|----------|---------------|
-| `/v1/recommend/{user_id}` | GET | SVD | Personalized recommendations |
-| `/v1/predict/{uid}/{mid}` | GET | SVD | Single rating prediction |
+| `/v1/recommend/users/{user_id}` | GET | SVD | Personalized recommendations |
+| `/v1/predict/users/{uid}/movies/{mid}` | GET | SVD | Single rating prediction |
 | `/v1/movies/{mid}/similar` | GET | SVD (Item CF) | "You might also like..." |
 | `/v1/users/{uid}/similar` | GET | SVD (User CF) | User segmentation |
 | `/v1/movies/{mid}` | GET | None | Movie metadata |

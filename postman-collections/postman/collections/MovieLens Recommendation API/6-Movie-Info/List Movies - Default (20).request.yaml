@@ -1,0 +1,31 @@
+$kind: http-request
+description: List first 20 movies.
+url: "{{baseUrl}}/v1/movies"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response is an array', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.be.an('array');
+      });
+
+      pm.test('Returns at most 20 movies', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.length).to.be.at.most(20);
+      });
+
+      pm.test('Movies have required fields', function() {
+          var jsonData = pm.response.json();
+          if (jsonData.length > 0) {
+              var movie = jsonData[0];
+              pm.expect(movie).to.have.property('movie_id');
+              pm.expect(movie).to.have.property('title');
+              pm.expect(movie).to.have.property('genres');
+          }
+      });
+order: 4000

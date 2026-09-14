@@ -1,0 +1,23 @@
+$kind: http-request
+description: |-
+  **Gợi ý top 5 phim cho user 42**
+
+  Endpoint: `/v1/recommend/users/{user_id}?n=5`
+
+  **Ý nghĩa:** Lấy 5 bộ phim được dự đoán cao nhất cho user 42.
+url: "{{baseUrl}}/v1/recommend/users/42?n=5"
+method: GET
+queryParams:
+  n: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Returns at most 5 recommendations', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.recommendations.length).to.be.at.most(5);
+      });
+order: 2000

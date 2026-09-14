@@ -1,0 +1,21 @@
+$kind: http-request
+description: |-
+  **Lấy thông tin cơ bản của API**
+
+  Endpoint: `/`
+
+  **Response:** Tên API, version, links đến docs
+url: "{{baseUrl}}/"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Response has name', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.name).to.include('MovieLens');
+      });
+order: 2000

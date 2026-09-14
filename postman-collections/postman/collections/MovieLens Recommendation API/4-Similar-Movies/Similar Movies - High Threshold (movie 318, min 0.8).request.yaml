@@ -1,0 +1,25 @@
+$kind: http-request
+description: |-
+  **Tìm phim tương tự movie 318 với similarity >= 0.8**
+
+  Endpoint: `/v1/movies/{movie_id}/similar?min_similarity=0.8`
+
+  **Ý nghĩa:** Chỉ trả về phim có similarity score >= 0.8 (rất giống nhau).
+url: "{{baseUrl}}/v1/movies/318/similar?min_similarity=0.8"
+method: GET
+queryParams:
+  min_similarity: "0.8"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('All similarities meet threshold', function() {
+          var jsonData = pm.response.json();
+          jsonData.similar_movies.forEach(function(movie) {
+              pm.expect(movie.similarity_score).to.be.at.least(0.8);
+          });
+      });
+order: 3000

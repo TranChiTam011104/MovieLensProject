@@ -1,0 +1,14 @@
+name: MovieLens API - Local
+values:
+  - key: baseUrl
+    value: 'http://localhost:8000'
+  - key: defaultUserId
+    value: '42'
+  - key: defaultMovieId
+    value: '318'
+  - key: shawsankRedemption
+    value: '318'
+    description: The Shawshank Redemption (1994)
+  - key: toyStory
+    value: '1'
+    description: Toy Story (1995)

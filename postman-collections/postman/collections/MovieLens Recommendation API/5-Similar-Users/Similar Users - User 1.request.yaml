@@ -1,0 +1,14 @@
+$kind: http-request
+description: |-
+  **Tìm users tương tự user 1**
+
+  Endpoint: `/v1/users/{user_id}/similar`
+url: "{{baseUrl}}/v1/users/1/similar"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+order: 4000

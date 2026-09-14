@@ -1,0 +1,18 @@
+$kind: http-request
+description: |-
+  **Gợi ý tối đa 50 phim cho user 42**
+
+  Endpoint: `/v1/recommend/{user_id}?n=50`
+
+  **Giới hạn:** n tối đa là 50.
+url: "{{baseUrl}}/v1/recommend/users/42?n=50"
+method: GET
+queryParams:
+  n: "50"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+order: 6000

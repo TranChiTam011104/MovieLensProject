@@ -2,7 +2,7 @@
 Recommendations Router - Endpoints for movie recommendations.
 
 ENDPOINTS:
-- GET /v1/recommend/{user_id} - Get personalized recommendations for a user
+- GET /v1/recommend/users/{user_id} - Get personalized recommendations for a user
 - GET /v1/movies/{movie_id}/similar - Get similar movies
 - GET /v1/users/{user_id}/similar - Get similar users
 """

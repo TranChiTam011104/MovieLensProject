@@ -1,0 +1,13 @@
+$kind: http-request
+description: List maximum 100 movies.
+url: "{{baseUrl}}/v1/movies?limit=100"
+method: GET
+queryParams:
+  limit: "100"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+order: 7000

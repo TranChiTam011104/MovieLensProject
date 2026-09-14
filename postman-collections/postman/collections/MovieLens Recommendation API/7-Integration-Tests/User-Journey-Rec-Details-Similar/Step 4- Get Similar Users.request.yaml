@@ -1,0 +1,13 @@
+$kind: http-request
+name: "Step 4: Get Similar Users"
+url: "{{baseUrl}}/v1/users/42/similar?n=5"
+method: GET
+queryParams:
+  n: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Get similar users', function() {
+          pm.response.to.have.status(200);
+      });
+order: 4000

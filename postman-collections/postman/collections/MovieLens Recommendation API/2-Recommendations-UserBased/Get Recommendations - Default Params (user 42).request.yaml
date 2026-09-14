@@ -1,0 +1,49 @@
+$kind: http-request
+description: |-
+  **Gợi ý phim cho user 42**
+
+  Endpoint: `/v1/recommend/users/{user_id}`
+
+  **Ý nghĩa:** Sử dụng SVD collaborative filtering để gợi ý những bộ phim mà user 42 có khả năng sẽ thích.
+
+  **Params mặc định:**
+  - n=10 (top 10 recommendations)
+  - exclude_watched=true (không gợi ý phim đã xem)
+  - min_rating=0 (không lọc theo rating)
+url: "{{baseUrl}}/v1/recommend/users/42"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Returns recommendations array', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('recommendations');
+          pm.expect(jsonData.recommendations).to.be.an('array');
+      });
+
+      pm.test('User ID matches', function() {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData.user_id).to.eql(42);
+      });
+
+      pm.test('Recommendations have required fields', function() {
+          var jsonData = pm.response.json();
+          if (jsonData.recommendations.length > 0) {
+              var rec = jsonData.recommendations[0];
+              pm.expect(rec).to.have.property('movie_id');
+              pm.expect(rec).to.have.property('predicted_rating');
+              pm.expect(rec).to.have.property('title');
+          }
+      });
+
+      pm.test('Predicted ratings are valid (1-5)', function() {
+          var jsonData = pm.response.json();
+          jsonData.recommendations.forEach(function(rec) {
+              pm.expect(rec.predicted_rating).to.be.within(1, 5);
+          });
+      });
+order: 1000

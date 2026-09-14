@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  **Test lỗi: Movie không tồn tại**
+
+  Endpoint: `/v1/movies/{movie_id}/similar`
+
+  **Kịch bản:** Movie 9999 không tồn tại
+  **Response mong đợi:** 200 (empty) hoặc 404
+url: "{{baseUrl}}/v1/movies/9999/similar"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200 (empty result or 404)', function() {
+          pm.expect(pm.response.code).to.be.oneOf([200, 404]);
+      });
+order: 5000

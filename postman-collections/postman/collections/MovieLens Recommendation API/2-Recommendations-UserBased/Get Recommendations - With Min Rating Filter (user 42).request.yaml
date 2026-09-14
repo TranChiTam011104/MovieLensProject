@@ -1,0 +1,26 @@
+$kind: http-request
+description: |-
+  **Gợi ý phim cho user 42 với rating tối thiểu 4.0**
+
+  Endpoint: `/v1/recommend/{user_id}?n=10&min_rating=4.0`
+
+  **Ý nghĩa:** Chỉ trả về phim có predicted rating >= 4.0 (tức phim được dự đoán user sẽ thích cao).
+url: "{{baseUrl}}/v1/recommend/users/42?n=10&min_rating=4.0"
+method: GET
+queryParams:
+  n: "10"
+  min_rating: "4.0"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200', function() {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('All recommendations meet min rating', function() {
+          var jsonData = pm.response.json();
+          jsonData.recommendations.forEach(function(rec) {
+              pm.expect(rec.predicted_rating).to.be.at.least(4.0);
+          });
+      });
+order: 4000

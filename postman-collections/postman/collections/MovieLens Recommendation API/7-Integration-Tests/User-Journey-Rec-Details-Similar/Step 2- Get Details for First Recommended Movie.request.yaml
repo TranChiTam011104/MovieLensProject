@@ -1,0 +1,13 @@
+$kind: http-request
+name: "Step 2: Get Details for First Recommended Movie"
+url: "{{baseUrl}}/v1/movies/{{first_recommended_movie_id}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Get movie details', function() {
+          pm.response.to.have.status(200);
+          var jsonData = pm.response.json();
+          pm.globals.set('recommended_movie_title', jsonData.title);
+      });
+order: 2000

@@ -1,0 +1,11 @@
+$kind: http-request
+description: Movie ID 9999 does not exist.
+url: "{{baseUrl}}/v1/movies/9999"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 404', function() {
+          pm.response.to.have.status(404);
+      });
+order: 3000

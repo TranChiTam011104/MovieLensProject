@@ -2,7 +2,7 @@
 Predictions Router - Endpoints for rating predictions.
 
 ENDPOINTS:
-- GET /v1/predict/{user_id}/{movie_id} - Predict rating for user-movie pair
+- GET /v1/predict/users/{user_id}/movies/{movie_id} - Predict rating for user-movie pair
 """
 
 from fastapi import APIRouter, HTTPException, Path

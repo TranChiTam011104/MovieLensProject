@@ -1,0 +1,19 @@
+$kind: collection
+description: |-
+  Collection for testing MovieLens 100K SVD-based recommendation API.
+
+  ## Base URL
+  ```
+  http://localhost:8000
+  ```
+
+  ## Endpoints
+  - `/health` - Health check
+  - `/v1/recommend/users/{user_id}` - Personalized recommendations
+  - `/v1/predict/users/{user_id}/movies/{movie_id}` - Rating prediction
+  - `/v1/movies/{movie_id}/similar` - Similar movies
+  - `/v1/users/{user_id}/similar` - Similar users
+  - `/v1/movies/{movie_id}` - Movie details
+  - `/v1/movies` - List movies
+variables:
+  baseUrl: http://localhost:8000
