@@ -173,6 +173,114 @@ def validate_data(df: pd.DataFrame) -> bool:
     pass
 
 
+def process_movies(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process movie data - extract genres and release year.
+    
+    ARGS:
+        df: DataFrame with movie data from u.item
+        
+    RETURNS:
+        DataFrame with columns: movie_id, title, genres, release_year, avg_rating, n_ratings
+    
+    VÍ DỤ:
+        >>> movies_df = load_movies()
+        >>> processed = process_movies(movies_df)
+        >>> print(processed.head())
+    """
+    import re
+    
+    # Copy to avoid modifying original
+    df = df.copy()
+    
+    # Basic columns
+    result = pd.DataFrame()
+    result['movie_id'] = df['movie_id']
+    result['title'] = df['title']
+    
+    # Extract release year from title (format: "Title, The (1994)")
+    def extract_year(title):
+        match = re.search(r'\((\d{4})\)$', str(title))
+        return int(match.group(1)) if match else None
+    
+    result['release_year'] = df['title'].apply(extract_year)
+    
+    # Extract genres from genre columns (genre_0 to genre_18)
+    genre_cols = [col for col in df.columns if col.startswith('genre_')]
+    
+    # Genre names (in order from MovieLens documentation)
+    GENRE_NAMES = [
+        'unknown', 'Action', 'Adventure', 'Animation', 'Children', 'Comedy',
+        'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror',
+        'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'
+    ]
+    
+    # Create genres list for each movie
+    def get_genres(row):
+        genres = []
+        for i, col in enumerate(sorted(genre_cols)):
+            if row[col] == 1 and i < len(GENRE_NAMES):
+                genres.append(GENRE_NAMES[i])
+        return genres
+    
+    result['genres'] = df.apply(get_genres, axis=1)
+    
+    # Placeholder for ratings info (will be computed from ratings data)
+    result['avg_rating'] = None
+    result['n_ratings'] = 0
+    
+    return result
+
+
+def add_rating_stats(
+    movies_df: pd.DataFrame,
+    ratings_df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Add rating statistics to movies DataFrame.
+    
+    Computes avg_rating and n_ratings from ratings data.
+    
+    ARGS:
+        movies_df: Processed movies DataFrame
+        ratings_df: Ratings DataFrame
+        
+    RETURNS:
+        movies_df with avg_rating and n_ratings columns filled
+    """
+    # Compute stats from ratings
+    rating_stats = ratings_df.groupby('item_id').agg(
+        n_ratings=('rating', 'count'),
+        avg_rating=('rating', 'mean')
+    ).reset_index()
+
+    # Merge with movies
+    result = movies_df.copy()
+    result = result.merge(
+        rating_stats,
+        left_on='movie_id',
+        right_on='item_id',
+        how='left'
+    )
+
+    # Ensure columns exist (handle edge case where merge produces nothing)
+    if 'avg_rating' not in result.columns:
+        result['avg_rating'] = 0.0
+    else:
+        result['avg_rating'] = result['avg_rating'].fillna(0)
+    
+    if 'n_ratings' not in result.columns:
+        result['n_ratings'] = 0
+    else:
+        result['n_ratings'] = result['n_ratings'].fillna(0).astype(int)
+    
+    # Drop redundant item_id column if exists
+    if 'item_id' in result.columns:
+        result.drop('item_id', axis=1, inplace=True)
+    
+    return result
+
+
 # ============================================================
 # MAIN - Test nếu chạy trực tiếp
 # ============================================================

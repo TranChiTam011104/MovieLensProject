@@ -59,6 +59,37 @@ def load_ratings(filepath: Path = None) -> pd.DataFrame:
     
 
 
+def load_movies(filepath: Path = None) -> pd.DataFrame:
+    """
+    Load movies data từ u.item file.
+    
+    DATA FORMAT (pipe-separated):
+    movie_id | title | release_date | video_release_date | IMDb_URL | 19 genre flags
+    
+    RETURNS:
+        pd.DataFrame với columns như MOVIES_COLUMNS định nghĩa
+    
+    VÍ DỤ:
+        >>> df = load_movies()
+        >>> print(df.head())
+           movie_id  title  release_date  genre_0  genre_1  ...
+        0        1  Toy Story (1995)  01-Jan-1995  0  1  ...
+    """
+    if filepath is None:
+        filepath = RAW_DATA_DIR / MOVIES_FILE
+    
+    # Read with pipe separator, no header
+    df = pd.read_csv(filepath, sep='|', header=None, encoding='latin-1')
+    
+    # Ensure we have the right number of columns
+    if len(df.columns) == 24:
+        df.columns = MOVIES_COLUMNS
+    else:
+        # If different format, create columns dynamically
+        df.columns = [f'col_{i}' for i in range(len(df.columns))]
+    
+    return df
+
 def load_users(filepath: Path = None) -> pd.DataFrame:
     """
     Load users demographic data từ u.user file.

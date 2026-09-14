@@ -1,0 +1,1339 @@
+{
+  "info": {
+    "name": "MovieLens Recommendation API",
+    "description": "Collection for testing MovieLens 100K SVD-based recommendation API.\n\n## Base URL\n```\nhttp://localhost:8000\n```\n\n## Endpoints\n- `/health` - Health check\n- `/v1/recommend/{user_id}` - Personalized recommendations\n- `/v1/predict/{user_id}/{movie_id}` - Rating prediction\n- `/v1/movies/{movie_id}/similar` - Similar movies\n- `/v1/users/{user_id}/similar` - Similar users\n- `/v1/movies/{movie_id}` - Movie details\n- `/v1/movies` - List movies",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+  "name": "1. Health & Info",
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Kiểm tra trạng thái hoạt động của API.\n\n**Response:** status, version, timestamp\n\n**Use case:** Load balancer health check, CI/CD verification"
+      },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has status healthy', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('healthy');",
+                  "});",
+                  "",
+                  "pm.test('Response has version', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('version');",
+                  "});",
+                  "",
+                  "pm.test('Response has timestamp', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Root Info",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "**Lấy thông tin cơ bản của API**\n\nEndpoint: `/`\n\n**Response:** Tên API, version, links đến docs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has name', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.name).to.include('MovieLens');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Personalized Recommendations (User-based)",
+      "item": [
+        {
+          "name": "Get Recommendations - Default Params (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"]
+            },
+            "description": "**Gợi ý phim cho user 42**\n\nEndpoint: `/v1/recommend/users/{user_id}`\n\n**Ý nghĩa:** Sử dụng SVD collaborative filtering để gợi ý những bộ phim mà user 42 có khả năng sẽ thích.\n\n**Params mặc định:**\n- n=10 (top 10 recommendations)\n- exclude_watched=true (không gợi ý phim đã xem)\n- min_rating=0 (không lọc theo rating)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns recommendations array', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('recommendations');",
+                  "    pm.expect(jsonData.recommendations).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('User ID matches', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user_id).to.eql(42);",
+                  "});",
+                  "",
+                  "pm.test('Recommendations have required fields', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.recommendations.length > 0) {",
+                  "        var rec = jsonData.recommendations[0];",
+                  "        pm.expect(rec).to.have.property('movie_id');",
+                  "        pm.expect(rec).to.have.property('predicted_rating');",
+                  "        pm.expect(rec).to.have.property('title');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('Predicted ratings are valid (1-5)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.recommendations.forEach(function(rec) {",
+                  "        pm.expect(rec.predicted_rating).to.be.within(1, 5);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Custom N (Top 5) (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42?n=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "**Gợi ý top 5 phim cho user 42**\n\nEndpoint: `/v1/recommend/users/{user_id}?n=5`\n\n**Ý nghĩa:** Lấy 5 bộ phim được dự đoán cao nhất cho user 42."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns at most 5 recommendations', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.recommendations.length).to.be.at.most(5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Include Watched (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42?exclude_watched=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"],
+              "query": [
+                {
+                  "key": "exclude_watched",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "**Gợi ý phim cho user 42 (bao gồm phim đã xem)**\n\nEndpoint: `/v1/recommend/{user_id}?exclude_watched=false`\n\n**Ý nghĩa:** Trả về cả những phim user đã đánh giá, kèm predicted rating."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - With Min Rating Filter (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42?n=10&min_rating=4.0",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "10"
+                },
+                {
+                  "key": "min_rating",
+                  "value": "4.0"
+                }
+              ]
+            },
+            "description": "**Gợi ý phim cho user 42 với rating tối thiểu 4.0**\n\nEndpoint: `/v1/recommend/{user_id}?n=10&min_rating=4.0`\n\n**Ý nghĩa:** Chỉ trả về phim có predicted rating >= 4.0 (tức phim được dự đoán user sẽ thích cao)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('All recommendations meet min rating', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.recommendations.forEach(function(rec) {",
+                  "        pm.expect(rec.predicted_rating).to.be.at.least(4.0);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Different Users (user 1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/1?n=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "1"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "**Gợi ý top 5 phim cho user 1**\n\nEndpoint: `/v1/recommend/{user_id}?n=5`\n\n**Ý nghĩa:** Verify rằng mỗi user nhận được gợi ý khác nhau dựa trên sở thích riêng."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('User ID is 1', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user_id).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Max N (50) (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42?n=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "**Gợi ý tối đa 50 phim cho user 42**\n\nEndpoint: `/v1/recommend/{user_id}?n=50`\n\n**Giới hạn:** n tối đa là 50."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Invalid User (404) (user 9999)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/9999",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "9999"]
+            },
+            "description": "**Test lỗi: User không tồn tại**\n\nEndpoint: `/v1/recommend/users/{user_id}`\n\n**Kịch bản:** User 9999 không tồn tại trong hệ thống\n**Response mong đợi:** 404 Not Found"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function() {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - Invalid User (422) (user 0)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/0",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "0"]
+            },
+            "description": "**Test lỗi: User ID không hợp lệ**\n\nEndpoint: `/v1/recommend/users/{user_id}`\n\n**Kịch bản:** User ID = 0 không hợp lệ (phải >= 1)\n**Response mong đợi:** 422 Unprocessable Entity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422 or 404', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([422, 404]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Recommendations - N exceeds limit (422) (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/recommend/users/42?n=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "recommend", "users", "42"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "**Test lỗi: N vượt quá giới hạn**\n\nEndpoint: `/v1/recommend/users/{user_id}?n=100`\n\n**Kịch bản:** n=100 trong khi giới hạn tối đa là 50\n**Response mong đợi:** 422 Unprocessable Entity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function() {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Rating Prediction (User + Movie)",
+      "item": [
+        {
+          "name": "Predict Rating - Normal Case (user 42, movie 318)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict/users/42/movies/318",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "predict", "users", "42", "movies", "318"]
+            },
+            "description": "**Dự đoán rating của user 42 cho movie 318**\n\nEndpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`\n\n**Ý nghĩa:** Movie 318 là The Shawshank Redemption - dự đoán xem user 42 sẽ đánh giá phim này bao nhiêu sao (1-5).\n\n**Response:** predicted_rating, confidence"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has predicted_rating', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('predicted_rating');",
+                  "});",
+                  "",
+                  "pm.test('Rating is within valid range', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.predicted_rating).to.be.within(1, 5);",
+                  "});",
+                  "",
+                  "pm.test('Response has confidence', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('confidence');",
+                  "    pm.expect(jsonData.confidence).to.be.within(0, 1);",
+                  "});",
+                  "",
+                  "pm.test('User and movie IDs match', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.user_id).to.eql(42);",
+                  "    pm.expect(jsonData.movie_id).to.eql(318);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict Rating - Test Case (user 1, movie 1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict/users/1/movies/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "predict", "users", "1", "movies", "1"]
+            },
+            "description": "**Dự đoán rating của user 1 cho movie 1**\n\nEndpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`\n\n**Ý nghĩa:** Movie 1 là Toy Story - dự đoán rating của user 1 cho bộ phim này."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Rating is valid', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.predicted_rating).to.be.within(1, 5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict Rating - Invalid User (404) (user 9999)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict/users/9999/movies/318",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "predict", "users", "9999", "movies", "318"]
+            },
+            "description": "**Test lỗi: User không tồn tại**\n\nEndpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`\n\n**Kịch bản:** User 9999 không tồn tại\n**Response mong đợi:** 404 Not Found"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function() {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict Rating - Invalid User (422) (user 0)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict/users/0/movies/318",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "predict", "users", "0", "movies", "318"]
+            },
+            "description": "**Test lỗi: User ID không hợp lệ**\n\nEndpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`\n\n**Kịch bản:** User ID = 0 không hợp lệ (phải >= 1)\n**Response mong đợi:** 422 Unprocessable Entity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422 or 404', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([422, 404]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Predict Rating - Invalid Movie (422) (movie 0)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/predict/users/42/movies/0",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "predict", "users", "42", "movies", "0"]
+            },
+            "description": "**Test lỗi: Movie ID không hợp lệ**\n\nEndpoint: `/v1/predict/users/{user_id}/movies/{movie_id}`\n\n**Kịch bản:** Movie ID = 0 không hợp lệ (phải >= 1)\n**Response mong đợi:** 422 Unprocessable Entity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function() {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Similar Movies (Item-based CF)",
+      "item": [
+        {
+          "name": "Similar Movies - Shawshank (movie 318)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/318/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "318", "similar"]
+            },
+            "description": "**Tìm phim tương tự movie 318 (The Shawshank Redemption)**\n\nEndpoint: `/v1/movies/{movie_id}/similar`\n\n**Ý nghĩa:** Sử dụng Item-based CF để tìm những phim có đặc trưng latent factors tương tự Shawshank."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has similar_movies array', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('similar_movies');",
+                  "    pm.expect(jsonData.similar_movies).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Similar movies have similarity scores', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.similar_movies.length > 0) {",
+                  "        var sim = jsonData.similar_movies[0];",
+                  "        pm.expect(sim).to.have.property('similarity_score');",
+                  "        pm.expect(sim.similarity_score).to.be.within(0, 1);",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('Movie IDs are valid', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.similar_movies.forEach(function(movie) {",
+                  "        pm.expect(movie.movie_id).to.be.a('number');",
+                  "        pm.expect(movie.movie_id).to.not.eql(318); // Should not include itself",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Movies - Top 5 (movie 318)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/318/similar?n=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "318", "similar"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "**Tìm top 5 phim tương tự movie 318**\n\nEndpoint: `/v1/movies/{movie_id}/similar?n=5`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns at most 5 similar movies', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.similar_movies.length).to.be.at.most(5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Movies - High Threshold (movie 318, min 0.8)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/318/similar?min_similarity=0.8",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "318", "similar"],
+              "query": [
+                {
+                  "key": "min_similarity",
+                  "value": "0.8"
+                }
+              ]
+            },
+            "description": "**Tìm phim tương tự movie 318 với similarity >= 0.8**\n\nEndpoint: `/v1/movies/{movie_id}/similar?min_similarity=0.8`\n\n**Ý nghĩa:** Chỉ trả về phim có similarity score >= 0.8 (rất giống nhau)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('All similarities meet threshold', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.similar_movies.forEach(function(movie) {",
+                  "        pm.expect(movie.similarity_score).to.be.at.least(0.8);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Movies - Toy Story (movie 1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/1/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "1", "similar"]
+            },
+            "description": "**Tìm phim tương tự movie 1 (Toy Story)**\n\nEndpoint: `/v1/movies/{movie_id}/similar`\n\n**Ý nghĩa:** Kiểm tra với movie khác (animation) để xem kết quả khác biệt."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Movies - Invalid Movie (9999)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/9999/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "9999", "similar"]
+            },
+            "description": "**Test lỗi: Movie không tồn tại**\n\nEndpoint: `/v1/movies/{movie_id}/similar`\n\n**Kịch bản:** Movie 9999 không tồn tại\n**Response mong đợi:** 200 (empty) hoặc 404"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 (empty result or 404)', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Similar Users (User-based CF)",
+      "item": [
+        {
+          "name": "Similar Users - User 42",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/42/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "42", "similar"]
+            },
+            "description": "**Tìm users có sở thích giống user 42**\n\nEndpoint: `/v1/users/{user_id}/similar`\n\n**Ý nghĩa:** Sử dụng User-based CF để tìm users có vector latent factors tương tự user 42."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has similar_users array', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('similar_users');",
+                  "    pm.expect(jsonData.similar_users).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Similar users have required fields', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.similar_users.length > 0) {",
+                  "        var user = jsonData.similar_users[0];",
+                  "        pm.expect(user).to.have.property('user_id');",
+                  "        pm.expect(user).to.have.property('similarity_score');",
+                  "        pm.expect(user).to.have.property('common_ratings');",
+                  "        pm.expect(user.user_id).to.not.eql(42); // Should not include self",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('Similarity scores are valid', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.similar_users.forEach(function(user) {",
+                  "        pm.expect(user.similarity_score).to.be.within(0, 1);",
+                  "        pm.expect(user.common_ratings).to.be.at.least(0);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Users - Top 5 (user 42)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/42/similar?n=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "42", "similar"],
+              "query": [
+                {
+                  "key": "n",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "**Tìm top 5 users tương tự user 42**\n\nEndpoint: `/v1/users/{user_id}/similar?n=5`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns at most 5 similar users', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.similar_users.length).to.be.at.most(5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Users - High Threshold (user 42, min 0.7)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/42/similar?min_similarity=0.7",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "42", "similar"],
+              "query": [
+                {
+                  "key": "min_similarity",
+                  "value": "0.7"
+                }
+              ]
+            },
+            "description": "**Tìm users tương tự user 42 với similarity >= 0.7**\n\nEndpoint: `/v1/users/{user_id}/similar?min_similarity=0.7`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('All similarities meet threshold', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    jsonData.similar_users.forEach(function(user) {",
+                  "        pm.expect(user.similarity_score).to.be.at.least(0.7);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Users - User 1",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/1/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "1", "similar"]
+            },
+            "description": "**Tìm users tương tự user 1**\n\nEndpoint: `/v1/users/{user_id}/similar`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Users - Invalid User (404) (user 9999)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/9999/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "9999", "similar"]
+            },
+            "description": "**Test lỗi: User không tồn tại**\n\nEndpoint: `/v1/users/{user_id}/similar`\n\n**Kịch bản:** User 9999 không tồn tại\n**Response mong đợi:** 404 Not Found"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function() {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Similar Users - Invalid User (422) (user 0)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/0/similar",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "0", "similar"]
+            },
+            "description": "**Test lỗi: User ID không hợp lệ**\n\nEndpoint: `/v1/users/{user_id}/similar`\n\n**Kịch bản:** User ID = 0 không hợp lệ (phải >= 1)\n**Response mong đợi:** 422 Unprocessable Entity"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function() {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Movie Information",
+      "item": [
+        {
+          "name": "Get Movie Details - Shawshank (movie 318)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/318",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "318"]
+            },
+            "description": "**Lấy thông tin chi tiết movie 318 (The Shawshank Redemption)**\n\nEndpoint: `/v1/movies/{movie_id}`\n\n**Response:** title, genres, release_year, avg_rating, n_ratings"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has movie fields', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('movie_id');",
+                  "    pm.expect(jsonData).to.have.property('title');",
+                  "    pm.expect(jsonData).to.have.property('genres');",
+                  "    pm.expect(jsonData.movie_id).to.eql(318);",
+                  "});",
+                  "",
+                  "pm.test('Genres is an array', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.genres).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Movie Details - Toy Story (movie 1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "1"]
+            },
+            "description": "**Lấy thông tin chi tiết movie 1 (Toy Story)**\n\nEndpoint: `/v1/movies/{movie_id}`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Movie ID is 1', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.movie_id).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Movie Details - Invalid (404)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies/9999",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies", "9999"]
+            },
+            "description": "Movie ID 9999 does not exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function() {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Movies - Default (20)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies"]
+            },
+            "description": "List first 20 movies."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Returns at most 20 movies', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.length).to.be.at.most(20);",
+                  "});",
+                  "",
+                  "pm.test('Movies have required fields', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.length > 0) {",
+                  "        var movie = jsonData[0];",
+                  "        pm.expect(movie).to.have.property('movie_id');",
+                  "        pm.expect(movie).to.have.property('title');",
+                  "        pm.expect(movie).to.have.property('genres');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Movies - Custom Limit (10)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "List first 10 movies."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns at most 10 movies', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.length).to.be.at.most(10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Movies - With Pagination",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies?limit=5&offset=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "offset",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "List 5 movies starting from offset 10."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns exactly 5 movies', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.length).to.eql(5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Movies - Limit 100 (Max)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/movies?limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "movies"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "List maximum 100 movies."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Integration Tests (Chaining - User Flow)",
+      "item": [
+        {
+          "name": "Full User Journey: Recommend → Details → Similar",
+          "item": [
+            {
+              "name": "Step 1: Get Recommendations for User 42",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Get recommendations', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    var jsonData = pm.response.json();",
+                      "    pm.globals.set('first_recommended_movie_id', jsonData.recommendations[0].movie_id);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/recommend/users/42?n=5",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "recommend", "users", "42"],
+                  "query": [
+                    {
+                      "key": "n",
+                      "value": "5"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Step 2: Get Details for First Recommended Movie",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Get movie details', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    var jsonData = pm.response.json();",
+                      "    pm.globals.set('recommended_movie_title', jsonData.title);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/movies/{{first_recommended_movie_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "movies", "{{first_recommended_movie_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Step 3: Find Similar Movies",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Find similar movies', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/movies/{{first_recommended_movie_id}}/similar?n=5",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "movies", "{{first_recommended_movie_id}}", "similar"],
+                  "query": [
+                    {
+                      "key": "n",
+                      "value": "5"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Step 4: Get Similar Users",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Get similar users', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/users/42/similar?n=5",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "users", "42", "similar"],
+                  "query": [
+                    {
+                      "key": "n",
+                      "value": "5"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compare Predictions - User 42 vs User 1 (movie 318)",
+          "item": [
+            {
+              "name": "Predict for User 42 (movie 318)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Get prediction for user 42', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    var jsonData = pm.response.json();",
+                      "    pm.globals.set('user42_rating', jsonData.predicted_rating);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/predict/users/42/movies/318",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "predict", "users", "42", "movies", "318"]
+                }
+              }
+            },
+            {
+              "name": "Predict for User 1 (movie 318)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Get prediction for user 1', function() {",
+                      "    pm.response.to.have.status(200);",
+                      "    var jsonData = pm.response.json();",
+                      "    pm.globals.set('user1_rating', jsonData.predicted_rating);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/v1/predict/users/1/movies/318",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["v1", "predict", "users", "1", "movies", "318"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
