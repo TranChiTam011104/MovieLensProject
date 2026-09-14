@@ -9,6 +9,7 @@ OUTPUT:
 """
 
 import sys
+import os
 from pathlib import Path
 
 # Add project root to path
@@ -21,7 +22,7 @@ from surprise.accuracy import rmse, mae
 import time
 
 # Import project modules
-from src.data.load import load_train_test_data
+from src.data.load import load_train_test_data, load_ratings
 from src.utils.config import MODELS_DIR, MODEL_NAME, N_FACTORS, N_EPOCHS, LEARNING_RATE, REG_ALL, TRAIN_TEST_FOLD
 
 
@@ -30,19 +31,14 @@ def train_svd_model(
     n_epochs: int = N_EPOCHS,
     lr_all: float = LEARNING_RATE,
     reg_all: float = REG_ALL,
-    random_state: int = 42,
-    fold: int = TRAIN_TEST_FOLD
+    random_state: int = 42
 ):
     """
     Train SVD model on MovieLens 100K dataset.
     
-    ARGS:
-        n_factors: Number of latent factors
-        n_epochs: Number of training epochs
-        lr_all: Learning rate
-        reg_all: Regularization strength
-        random_state: Random seed
-        fold: Train/test fold number (0=ua/ub, 1-5=ub)
+    Data source controlled by USE_FULL_DATA in .env:
+        - true: use u.data (100K ratings)
+        - false: use fold-based split (TRAIN_TEST_FOLD)
         
     RETURNS:
         Trained SVD model
@@ -51,14 +47,23 @@ def train_svd_model(
     print("🎬 MovieLens SVD Model Training")
     print("=" * 60)
     
-    # Load data with train/test split
-    print(f"\n📂 Loading data (fold={fold})...")
+    # Read USE_FULL_DATA from environment
+    env_use_full = os.getenv("USE_FULL_DATA", "true").lower() == "true"
+    
+    # Load data
+    print(f"\n📂 Loading data...")
     start_time = time.time()
     
-    train_df, test_df = load_train_test_data(fold=fold)
+    if env_use_full:
+        # Dùng full u.data (100K ratings)
+        train_df = load_ratings()
+        print(f"   ✓ Full data: {len(train_df):,} ratings (u.data)")
+    else:
+        # Dùng fold-based split
+        train_df, test_df = load_train_test_data(fold=TRAIN_TEST_FOLD)
+        print(f"   ✓ Train: {len(train_df):,} ratings")
+        print(f"   ✓ Test:  {len(test_df):,} ratings")
     
-    print(f"   ✓ Train: {len(train_df):,} ratings")
-    print(f"   ✓ Test:  {len(test_df):,} ratings")
     print(f"   ⏱️ Data loading: {time.time() - start_time:.2f}s")
     
     # Prepare for Surprise
@@ -100,18 +105,15 @@ def train_svd_model(
     joblib.dump(model, model_path)
     print(f"   ✓ Model saved to: {model_path}")
     
-    # Evaluate on test data
-    print("\n📊 Evaluating on test data...")
-    
-    # Convert test_df to predictions format
-    test_set = [(row['user_id'], row['item_id'], row['rating']) for _, row in test_df.iterrows()]
-    predictions = model.test(test_set)
-    
-    test_rmse = rmse(predictions)
-    test_mae = mae(predictions)
-    
-    print(f"   Test RMSE: {test_rmse:.4f}")
-    print(f"   Test MAE:  {test_mae:.4f}")
+    # Evaluate on test data (chỉ khi dùng fold-based split)
+    if not env_use_full:
+        print("\n📊 Evaluating on test data...")
+        test_set = [(row['user_id'], row['item_id'], row['rating']) for _, row in test_df.iterrows()]
+        predictions = model.test(test_set)
+        test_rmse = rmse(predictions)
+        test_mae = mae(predictions)
+        print(f"   Test RMSE: {test_rmse:.4f}")
+        print(f"   Test MAE:  {test_mae:.4f}")
     
     print("\n" + "=" * 60)
     print("✅ Training complete!")
@@ -128,8 +130,13 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=0.005, help="Learning rate")
     parser.add_argument("--reg", type=float, default=0.02, help="Regularization")
+    parser.add_argument("--fold", action="store_true", help="Use fold-based split instead of full data")
     
     args = parser.parse_args()
+    
+    # Override USE_FULL_DATA nếu dùng --fold
+    if args.fold:
+        os.environ["USE_FULL_DATA"] = "false"
     
     train_svd_model(
         n_factors=args.factors,

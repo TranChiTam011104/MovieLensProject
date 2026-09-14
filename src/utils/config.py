@@ -11,8 +11,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env file
-load_dotenv()
+# Load .env file from project root
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 # ============================================================
 # PATHS - Đường dẫn đến các thư mục
@@ -80,6 +81,9 @@ REG_ALL = float(os.getenv("REG_ALL", "0.02"))
 
 # Fold 1-5 cho 5-fold CV, 0 cho ua.base/ua.test
 TRAIN_TEST_FOLD = int(os.getenv("TRAIN_TEST_FOLD", "1"))
+
+# Train trên full data hay fold-based
+USE_FULL_DATA = os.getenv("USE_FULL_DATA", "false").lower() == "true"
 
 # Model output name
 MODEL_NAME = os.getenv("MODEL_NAME", "svd_model")
