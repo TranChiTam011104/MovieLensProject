@@ -102,12 +102,17 @@ async def lifespan(app: FastAPI):
                 n_factors=100,
                 n_epochs=20
             )
-            
+
             # Load trained similarity service factors
             sim_service._ratings_df = ratings_df
             sim_service._movies_df = processed_movies
             sim_service._trainset = trainset
             sim_service._extract_latent_factors()
+
+            # Cache data for recommendation engine
+            engine = get_engine()
+            engine._ratings_df = ratings_df
+            engine._movies_df = processed_movies
         else:
             # Initialize similarity service with loaded model
             logger.info("🔗 Initializing similarity service...")
@@ -131,6 +136,10 @@ async def lifespan(app: FastAPI):
             sim_service._trainset = trainset
             sim_service._extract_latent_factors()
             sim_service._is_loaded = True
+
+            # Cache data for recommendation engine
+            engine._ratings_df = ratings_df
+            engine._movies_df = processed_movies
         
         # Cache movies
         from src.api.routers import movies as movies_module

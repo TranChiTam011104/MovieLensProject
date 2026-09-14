@@ -179,6 +179,12 @@ class RecommendationEngine:
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load_model() or train() first.")
         
+        # Use cached data if not provided
+        if movies_df is None:
+            movies_df = self._movies_df
+        if ratings_df is None:
+            ratings_df = self._ratings_df
+        
         # Get all movie IDs
         if movies_df is not None:
             all_movie_ids = movies_df['movie_id'].unique().tolist()
