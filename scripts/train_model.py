@@ -5,7 +5,7 @@ CHẠY:
     python scripts/train_model.py
 
 OUTPUT:
-    models/svd_model.pkl - Trained SVD model
+    models/svd_model_fold{N}.pkl - Trained SVD model
 """
 
 import sys
@@ -17,20 +17,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import joblib
 from surprise import SVD, Dataset, Reader
+from surprise.accuracy import rmse, mae
 import time
 
 # Import project modules
-from src.data.load import load_ratings, load_movies
-from src.data.preprocess import process_movies, add_rating_stats
-from src.utils.config import MODELS_DIR, MODEL_FILENAMES
+from src.data.load import load_train_test_data
+from src.utils.config import MODELS_DIR, MODEL_NAME, N_FACTORS, N_EPOCHS, LEARNING_RATE, REG_ALL, TRAIN_TEST_FOLD
 
 
 def train_svd_model(
-    n_factors: int = 100,
-    n_epochs: int = 20,
-    lr_all: float = 0.005,
-    reg_all: float = 0.02,
-    random_state: int = 42
+    n_factors: int = N_FACTORS,
+    n_epochs: int = N_EPOCHS,
+    lr_all: float = LEARNING_RATE,
+    reg_all: float = REG_ALL,
+    random_state: int = 42,
+    fold: int = TRAIN_TEST_FOLD
 ):
     """
     Train SVD model on MovieLens 100K dataset.
@@ -41,6 +42,7 @@ def train_svd_model(
         lr_all: Learning rate
         reg_all: Regularization strength
         random_state: Random seed
+        fold: Train/test fold number (0=ua/ub, 1-5=ub)
         
     RETURNS:
         Trained SVD model
@@ -49,28 +51,25 @@ def train_svd_model(
     print("🎬 MovieLens SVD Model Training")
     print("=" * 60)
     
-    # Load data
-    print("\n📂 Loading data...")
+    # Load data with train/test split
+    print(f"\n📂 Loading data (fold={fold})...")
     start_time = time.time()
     
-    ratings_df = load_ratings()
-    movies_df = load_movies()
-    processed_movies = process_movies(movies_df)
-    processed_movies = add_rating_stats(processed_movies, ratings_df)
+    train_df, test_df = load_train_test_data(fold=fold)
     
-    print(f"   ✓ Loaded {len(ratings_df):,} ratings")
-    print(f"   ✓ Loaded {len(processed_movies):,} movies")
+    print(f"   ✓ Train: {len(train_df):,} ratings")
+    print(f"   ✓ Test:  {len(test_df):,} ratings")
     print(f"   ⏱️ Data loading: {time.time() - start_time:.2f}s")
     
     # Prepare for Surprise
     print("\n🔧 Preparing data for SVD...")
     reader = Reader(rating_scale=(1, 5))
     data = Dataset.load_from_df(
-        ratings_df[['user_id', 'item_id', 'rating']], 
+        train_df[['user_id', 'item_id', 'rating']], 
         reader
     )
     
-    # Build trainset (use all data for training)
+    # Build trainset
     trainset = data.build_full_trainset()
     
     print(f"   ✓ Trainset: {trainset.n_users:,} users, {trainset.n_items:,} items, {trainset.n_ratings:,} ratings")
@@ -97,20 +96,22 @@ def train_svd_model(
     
     # Save model
     print("\n💾 Saving model...")
-    model_path = MODELS_DIR / MODEL_FILENAMES["svd"]
+    model_path = MODELS_DIR / f"{MODEL_NAME}.pkl"
     joblib.dump(model, model_path)
     print(f"   ✓ Model saved to: {model_path}")
     
-    # Quick evaluation on training data
-    print("\n📊 Quick evaluation on training data...")
-    predictions = model.test(trainset.build_testset())
+    # Evaluate on test data
+    print("\n📊 Evaluating on test data...")
     
-    from surprise.accuracy import rmse, mae
-    train_rmse = rmse(predictions)
-    train_mae = mae(predictions)
+    # Convert test_df to predictions format
+    test_set = [(row['user_id'], row['item_id'], row['rating']) for _, row in test_df.iterrows()]
+    predictions = model.test(test_set)
     
-    print(f"   Training RMSE: {train_rmse:.4f}")
-    print(f"   Training MAE:  {train_mae:.4f}")
+    test_rmse = rmse(predictions)
+    test_mae = mae(predictions)
+    
+    print(f"   Test RMSE: {test_rmse:.4f}")
+    print(f"   Test MAE:  {test_mae:.4f}")
     
     print("\n" + "=" * 60)
     print("✅ Training complete!")

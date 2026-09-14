@@ -19,7 +19,7 @@ from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Config
-from ...utils.config import MODELS_DIR, MODEL_FILENAMES
+from ...utils.config import MODELS_DIR, MODEL_FILENAMES, MODEL_NAME
 
 
 class SimilarityService:
@@ -31,14 +31,16 @@ class SimilarityService:
     - User similarity: dựa trên user embeddings (p_u)
     """
     
-    def __init__(self, model_path: Path = None):
+    def __init__(self, model_path: Path = None, model_name: str = None):
         """
         Initialize similarity service.
         
         ARGS:
             model_path: Path to trained SVD model.
+            model_name: Name for model file (without .pkl extension).
         """
-        self.model_path = model_path or (MODELS_DIR / MODEL_FILENAMES["svd"])
+        self._model_name = model_name or MODEL_NAME
+        self.model_path = model_path or (MODELS_DIR / f"{self._model_name}.pkl")
         self.model = None
         self._is_loaded = False
         
@@ -438,17 +440,17 @@ class SimilarityService:
 _similarity_service: Optional[SimilarityService] = None
 
 
-def get_similarity_service() -> SimilarityService:
+def get_similarity_service(model_name: str = None) -> SimilarityService:
     """Get or create global similarity service."""
     global _similarity_service
     if _similarity_service is None:
-        _similarity_service = SimilarityService()
+        _similarity_service = SimilarityService(model_name=model_name)
     return _similarity_service
 
 
-def load_similarity_service(model_path: Path = None) -> bool:
+def load_similarity_service(model_path: Path = None, model_name: str = None) -> bool:
     """Load the global similarity service."""
     global _similarity_service
     if _similarity_service is None:
-        _similarity_service = SimilarityService(model_path)
+        _similarity_service = SimilarityService(model_path=model_path, model_name=model_name)
     return _similarity_service.load_model()

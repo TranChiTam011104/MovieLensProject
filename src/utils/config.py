@@ -7,7 +7,12 @@ TẠI SAO CẦN FILE NÀY?
 - Tái sử dụng constants ở nhiều nơi
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file
+load_dotenv()
 
 # ============================================================
 # PATHS - Đường dẫn đến các thư mục
@@ -42,7 +47,19 @@ USERS_FILE = "u.user"
 GENRES_FILE = "u.genre"
 
 # ============================================================
-# MODEL CONFIG - Cấu hình model
+# TRAIN/TEST SPLIT FILES - Đã có sẵn từ MovieLens
+# ============================================================
+
+# 5-fold cross validation (u1-u5)
+TRAIN_FILES = ["u1.base", "u2.base", "u3.base", "u4.base", "u5.base"]
+TEST_FILES = ["u1.test", "u2.test", "u3.test", "u4.test", "u5.test"]
+
+# Single train/test split (10 ratings/user trong test)
+SINGLE_TRAIN_FILE = "ua.base"
+SINGLE_TEST_FILE = "ua.test"
+
+# ============================================================
+# MODEL CONFIG - Cấu hình model (từ .env)
 # ============================================================
 
 # Số folds cho cross-validation
@@ -50,6 +67,34 @@ N_CV_FOLDS = 5
 
 # Các thuật toán sẽ test
 ALGORITHMS = ["SVD", "KNNBasic", "KNNWithMeans", "BaselineOnly"]
+
+# Model hyperparameters
+N_FACTORS = int(os.getenv("N_FACTORS", "100"))
+N_EPOCHS = int(os.getenv("N_EPOCHS", "20"))
+LEARNING_RATE = float(os.getenv("LEARNING_RATE", "0.005"))
+REG_ALL = float(os.getenv("REG_ALL", "0.02"))
+
+# ============================================================
+# TRAIN/TEST SPLIT CONFIG (từ .env)
+# ============================================================
+
+# Fold 1-5 cho 5-fold CV, 0 cho ua.base/ua.test
+TRAIN_TEST_FOLD = int(os.getenv("TRAIN_TEST_FOLD", "1"))
+
+# Model output name
+MODEL_NAME = os.getenv("MODEL_NAME", "svd_model")
+
+# Dataset stats (cho confidence calculation)
+TOTAL_USERS = int(os.getenv("TOTAL_USERS", "943"))
+TOTAL_MOVIES = int(os.getenv("TOTAL_MOVIES", "1682"))
+
+# ============================================================
+# SIMILARITY SERVICE CONFIG (từ .env)
+# ============================================================
+
+SIM_N_FACTORS = int(os.getenv("SIM_N_FACTORS", "100"))
+SIM_N_EPOCHS = int(os.getenv("SIM_N_EPOCHS", "20"))
+DEFAULT_N_RECOMMENDATIONS = int(os.getenv("DEFAULT_N_RECOMMENDATIONS", "10"))
 
 # ============================================================
 # COLUMNS - Tên cột trong data

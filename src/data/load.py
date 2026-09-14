@@ -128,6 +128,50 @@ def load_genres(filepath: Path = None) -> pd.DataFrame:
     pass
 
 
+def load_train_test_data(fold: int = 1) -> tuple:
+    """
+    Load train và test data từ MovieLens pre-split files.
+    
+    MovieLens đã có sẵn 5-fold cross validation splits:
+    - u1.base/u1.test, u2.base/u2.test, ..., u5.base/u5.test
+    - ua.base/ua.test, ub.base/ub.test (10 ratings/user trong test)
+    
+    ARGS:
+        fold: Fold number (1-5) cho cross validation, 
+              hoặc 0 cho ua.base/ua.test
+    
+    RETURNS:
+        Tuple (train_df, test_df) với columns: user_id, item_id, rating, timestamp
+    
+    VÍ DỤ:
+        >>> train, test = load_train_test_data(fold=1)
+        >>> print(f"Train: {len(train)} ratings")
+        >>> print(f"Test: {len(test)} ratings")
+    """
+    from ..utils.config import (
+        RAW_DATA_DIR, 
+        TRAIN_FILES, 
+        TEST_FILES, 
+        SINGLE_TRAIN_FILE, 
+        SINGLE_TEST_FILE
+    )
+    
+    if fold == 0:
+        # Dùng ua.base/ua.test (10 ratings/user)
+        train_path = RAW_DATA_DIR / SINGLE_TRAIN_FILE
+        test_path = RAW_DATA_DIR / SINGLE_TEST_FILE
+    else:
+        # Dùng u{fold}.base/u{fold}.test
+        idx = fold - 1  # Convert 1-5 -> 0-4
+        train_path = RAW_DATA_DIR / TRAIN_FILES[idx]
+        test_path = RAW_DATA_DIR / TEST_FILES[idx]
+    
+    train_df = pd.read_csv(train_path, sep='\t', header=None, names=RATINGS_COLUMNS)
+    test_df = pd.read_csv(test_path, sep='\t', header=None, names=RATINGS_COLUMNS)
+    
+    return train_df, test_df
+
+
 def get_dataset_info() -> dict:
     """
     Trả về thông tin tổng quan về dataset.

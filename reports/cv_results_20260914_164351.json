@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "timestamp": "2026-09-14T16:43:46.848492",
+    "n_folds": 5,
+    "train_files": [
+      "u1.base",
+      "u2.base",
+      "u3.base",
+      "u4.base",
+      "u5.base"
+    ],
+    "test_files": [
+      "u1.test",
+      "u2.test",
+      "u3.test",
+      "u4.test",
+      "u5.test"
+    ],
+    "algorithms": [
+      "SVD"
+    ]
+  },
+  "per_fold": {
+    "SVD": {
+      "fold_1": {
+        "RMSE": 0.9485092305820706,
+        "MAE": 0.7470857608835008,
+        "Fit Time": 0.6048905849456787,
+        "Test Time": 0.11899900436401367,
+        "model_path": "D:\\Hoc_voi_cha_hanh\\AIInAction\\VSF_Intern\\MovieLensProject\\models\\svd_model_fold1.pkl"
+      },
+      "fold_2": {
+        "RMSE": 0.9414052424324489,
+        "MAE": 0.7398646891447274,
+        "Fit Time": 0.5522222518920898,
+        "Test Time": 0.11974668502807617,
+        "model_path": "D:\\Hoc_voi_cha_hanh\\AIInAction\\VSF_Intern\\MovieLensProject\\models\\svd_model_fold2.pkl"
+      },
+      "fold_3": {
+        "RMSE": 0.9310722373842882,
+        "MAE": 0.7337512247267775,
+        "Fit Time": 0.6234817504882812,
+        "Test Time": 0.1246941089630127,
+        "model_path": "D:\\Hoc_voi_cha_hanh\\AIInAction\\VSF_Intern\\MovieLensProject\\models\\svd_model_fold3.pkl"
+      },
+      "fold_4": {
+        "RMSE": 0.9334959273306688,
+        "MAE": 0.7354688630943665,
+        "Fit Time": 0.6592686176300049,
+        "Test Time": 0.11838793754577637,
+        "model_path": "D:\\Hoc_voi_cha_hanh\\AIInAction\\VSF_Intern\\MovieLensProject\\models\\svd_model_fold4.pkl"
+      },
+      "fold_5": {
+        "RMSE": 0.932652450190942,
+        "MAE": 0.739434890452377,
+        "Fit Time": 0.7100460529327393,
+        "Test Time": 0.12724614143371582,
+        "model_path": "D:\\Hoc_voi_cha_hanh\\AIInAction\\VSF_Intern\\MovieLensProject\\models\\svd_model_fold5.pkl"
+      }
+    }
+  },
+  "summary": {
+    "SVD": {
+      "RMSE": {
+        "mean": 0.9374,
+        "std": 0.0066
+      },
+      "MAE": {
+        "mean": 0.7391,
+        "std": 0.0046
+      },
+      "Fit Time": {
+        "mean": 0.63
+      },
+      "Test Time": {
+        "mean": 0.12
+      }
+    }
+  }
+}

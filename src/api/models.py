@@ -60,11 +60,9 @@ class MovieRecommendation(BaseModel):
         le=5,
         description="Predicted rating (1-5 stars)"
     )
-    confidence: Optional[float] = Field(
+    actual_rating: Optional[float] = Field(
         None,
-        ge=0,
-        le=1,
-        description="Model confidence score"
+        description="User's actual rating if exists in test data"
     )
 
 
@@ -106,15 +104,9 @@ class PredictionResponse(BaseModel):
         le=5,
         description="Predicted rating (1-5 scale)"
     )
-    confidence: Optional[float] = Field(
-        None,
-        ge=0,
-        le=1,
-        description="Prediction confidence"
-    )
     actual_rating: Optional[float] = Field(
         None,
-        description="User's actual rating if exists in training data"
+        description="User's actual rating if exists in test data"
     )
 
 
