@@ -45,27 +45,31 @@ pip install -r requirements-dev.txt
 
 ```
 MovieLensProject/
-├── data/           # Dữ liệu (raw & processed)
 ├── src/             # Source code
-│   ├── model/       # Model training
-│   ├── api/         # FastAPI app
-│   ├── features/    # Feature engineering
-│   └── serving/     # Serving logic
-├── tests/           # Unit & integration tests
-├── configs/         # Configuration files
-├── docker/          # Docker files
-├── scripts/          # Utility scripts
+│   ├── api/         # FastAPI app (routers, services)
+│   ├── data/        # Data loading & preprocessing
+│   ├── models/      # Model training
+│   └── utils/       # Configuration
+├── models/           # Trained model artifacts
+├── data/             # Raw & processed data
+├── scripts/          # Training & evaluation scripts
+├── tests/            # Unit & integration tests
+├── configs/          # YAML configuration files
+├── postman-collections/  # API testing collections
+├── reports/          # CV results & experiments
 ├── docs/             # Documentation
-├── notebooks/        # EDA & experiments
-└── .github/          # CI/CD workflows
+│   └── api/          # API spec & use cases
+├── .github/workflows/ # CI/CD pipelines
+├── deploy.sh          # Manual deployment script
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ## 6. Chạy Local Development
 
 ### Start API
 ```bash
-cd src/api
-uvicorn main:app --reload --port 8000
+uvicorn src.api.main:app --reload --port 8000
 ```
 
 ### Run Tests
@@ -75,7 +79,6 @@ pytest tests/ -v
 
 ## 7. Docker
 ```bash
-cd docker
 docker-compose up --build
 ```
 

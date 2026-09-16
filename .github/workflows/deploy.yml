@@ -1,71 +1,296 @@
-name: Deploy to AWS
+# ============================================================
+# GitHub Actions - CI/CD Pipeline for MovieLens API
+# ============================================================
+# Triggers:
+#   - Push to main           → Deploy to PRODUCTION
+#   - Push to feature/*      → Deploy as CANARY (10%)
+#   - Pull Request to main   → Run tests + lint only
+#   - Manual dispatch        → Deploy canary/promote/rollback
+# ============================================================
+
+name: MovieLens CI/CD
 
 on:
   push:
-    branches: [main]
-    tags:
-      - 'v*'
+    branches:
+      - main          # Production deploy
+      - 'feature/**'  # Canary deploy (10%)
+    paths:
+      - 'src/**'
+      - 'models/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+  
+  pull_request:
+    branches:
+      - main
+  
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment'
+      action:
+        description: 'Action to perform'
         required: true
-        default: 'staging'
         type: choice
+        default: 'deploy-canary'
         options:
-          - staging
-          - production
+          - deploy-canary
+          - promote-canary
+          - rollback-canary
+          - set-traffic
+        environment_name:
+          description: 'GitHub Actions environment'
+          required: true
+          type: choice
+          default: 'vsfintern-gcp'
+          options:
+            - vsfintern-gcp
+        traffic_percent:
+          description: 'Canary traffic % (for set-traffic)'
+          required: false
+          type: string
+          default: '10'
 
+# ============================================================
+# ENVIRONMENT VARIABLES
+# ============================================================
+env:
+  PROJECT_ID: vsfintern
+  REGION: us-central1
+  SERVICE_NAME: movielens-api
+  IMAGE_NAME: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+
+# ============================================================
+# JOBS
+# ============================================================
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
-        
-      - name: Run tests
-        run: pytest tests/ -v
 
-  build-and-deploy:
-    needs: test
+  # ----------------------------------------------------------
+  # JOB 1: Test & Lint (chạy trên PR và push)
+  # ----------------------------------------------------------
+  test:
+    name: 🧪 Test & Lint
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-          
-      - name: Set up Python
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          
-      - name: Build Docker image
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
         run: |
-          docker build -t movielens-api:${{ github.sha }} -f docker/Dockerfile.api .
-          
-      - name: Push to ECR
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: 🔍 Lint with flake8
         run: |
-          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
-          docker tag movielens-api:${{ github.sha }} ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/movielens-api:latest
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/movielens-api:latest
-          
-      - name: Deploy to EC2
-        if: github.event.inputs.environment == 'production'
+          flake8 src/ --max-line-length=120 --statistics
+
+      - name: 🧪 Run pytest
         run: |
-          # SSH and deploy script
-          echo "Deploying to production EC2..."
-          # Add your deployment commands here
+          pytest tests/ -v --tb=short
+
+  # ----------------------------------------------------------
+  # JOB 2: Deploy Production (chỉ khi push main)
+  # ----------------------------------------------------------
+  deploy-production:
+    name: 🚀 Deploy Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://movielens-api-366360236110.us-central1.run.app
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 📦 Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: 🏗 Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            .
+
+      - name: 📤 Push to Container Registry
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      - name: 🚀 Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+          flags: |
+            --port=8000
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=10
+            --allow-unauthenticated
+            --set-env-vars=PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_full
+
+      - name: ✅ Smoke test
+        run: |
+          sleep 10
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://movielens-api-366360236110.us-central1.run.app/health)
+          if [ "$response" != "200" ]; then
+            echo "❌ Health check failed! Status: $response"
+            exit 1
+          fi
+          echo "✅ Health check passed!"
+
+  # ----------------------------------------------------------
+  # JOB 3: Deploy Canary (chỉ khi push feature branch)
+  # ----------------------------------------------------------
+  deploy-canary:
+    name: 🐤 Deploy Canary
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
+    environment:
+      name: canary
+      url: https://movielens-api-366360236110.us-central1.run.app
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 📦 Configure Docker for GCR
+        run: gcloud auth configure-docker --quiet
+
+      - name: 🏗 Build Docker image (canary)
+        run: |
+          docker build \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            .
+
+      - name: 📤 Push image
+        run: docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: 🐤 Deploy canary revision
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+          flags: |
+            --port=8000
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=5
+            --allow-unauthenticated
+            --revision-suffix=-canary
+            --set-env-vars=PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_fold5
+
+      - name: 🔀 Set traffic split (90% prod / 10% canary)
+        run: |
+          PROD_REV=$(gcloud run revisions list \
+            --service=${{ env.SERVICE_NAME }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --format="value(metadata.name)" | grep -v canary | head -1)
+          
+          echo "Production revision: $PROD_REV"
+          
+          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --to-revisions="${PROD_REV}=90,${{ env.SERVICE_NAME }}-canary=10"
+
+      - name: ✅ Smoke test canary
+        run: |
+          sleep 10
+          for i in 1 2 3 4 5; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://movielens-api-366360236110.us-central1.run.app/health)
+            if [ "$response" == "200" ]; then
+              echo "✅ Canary is healthy!"
+              exit 0
+            fi
+            echo "⏳ Attempt $i failed (status: $response), retrying..."
+            sleep 5
+          done
+          echo "❌ Canary health check failed!"
+          exit 1
+
+  # ----------------------------------------------------------
+  # JOB 4: Manual Operations (promote/rollback/set-traffic)
+  # ----------------------------------------------------------
+  manual-operation:
+    name: 🎛 Manual Operation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment_name }}
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔑 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🛠 Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 🎯 Execute action
+        env:
+          ACTION: ${{ github.event.inputs.action }}
+          TRAFFIC_PERCENT: "${{ github.event.inputs.traffic_percent }}"
+        run: |
+          case "$ACTION" in
+            deploy-canary)
+              echo "Deploying canary..."
+              ./deploy.sh canary
+              ./deploy.sh split 10
+              ;;
+            promote-canary)
+              echo "Promoting canary to 100%..."
+              ./deploy.sh promote
+              ;;
+            rollback-canary)
+              echo "Rolling back to production..."
+              ./deploy.sh rollback
+              ;;
+            set-traffic)
+              echo "Setting canary traffic to ${TRAFFIC_PERCENT}%..."
+              ./deploy.sh split $TRAFFIC_PERCENT
+              ;;
+            *)
+              echo "Unknown action: $ACTION"
+              exit 1
+              ;;
+          esac
