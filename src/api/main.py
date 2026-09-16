@@ -65,16 +65,26 @@ async def lifespan(app: FastAPI):
         from src.data.load import load_ratings, load_movies, load_train_test_data
         from src.data.preprocess import process_movies, add_rating_stats
         from src.utils.config import (
-            N_FACTORS, N_EPOCHS, TRAIN_TEST_FOLD, 
+            N_FACTORS, N_EPOCHS, 
             SIM_N_FACTORS, SIM_N_EPOCHS, DEFAULT_N_RECOMMENDATIONS,
-            TOTAL_USERS, TOTAL_MOVIES, MODEL_NAME
+            TOTAL_USERS, TOTAL_MOVIES, MODEL_NAME,
+            get_fold_from_model_name, get_train_test_files_from_model_name
         )
         
-        # Load pre-split train/test data (MovieLens đã có sẵn)
-        logger.info("📂 Loading train/test data...")
-        train_df, test_df = load_train_test_data(fold=TRAIN_TEST_FOLD)
+        # Xác định fold từ model_name
+        model_fold = get_fold_from_model_name(MODEL_NAME)
+        train_file, test_file, is_full_data = get_train_test_files_from_model_name(MODEL_NAME)
+        
+        logger.info(f"📂 Loading data for model: {MODEL_NAME}")
+        logger.info(f"   Fold: {model_fold}, Train file: {train_file}, Full data: {is_full_data}")
+        
+        # Load train/test data dựa trên model_name
+        train_df, test_df = load_train_test_data(model_name=MODEL_NAME)
         logger.info(f"   ✓ Train: {len(train_df)} ratings")
-        logger.info(f"   ✓ Test: {len(test_df)} ratings")
+        if test_df is not None:
+            logger.info(f"   ✓ Test: {len(test_df)} ratings")
+        else:
+            logger.info(f"   ✓ Using full data (no test split)")
         
         # Load movies
         movies_df = load_movies()
@@ -82,11 +92,14 @@ async def lifespan(app: FastAPI):
         
         # For recommendations: use train_df + test_df combined for stats
         # (vì khi recommend, cần biết tổng quan về user/item)
-        all_ratings_df = pd.concat([train_df, test_df], ignore_index=True)
+        if test_df is not None:
+            all_ratings_df = pd.concat([train_df, test_df], ignore_index=True)
+        else:
+            all_ratings_df = train_df
         processed_movies = add_rating_stats(processed_movies, all_ratings_df)
         
         # Try to load pre-trained model
-        logger.info("🤖 Loading SVD model...")
+        logger.info(f"🤖 Loading SVD model: {MODEL_NAME}...")
         model_loaded = load_engine(model_name=MODEL_NAME)
         
         if not model_loaded:
@@ -241,12 +254,13 @@ app.add_middleware(
 # INCLUDE ROUTERS
 # ============================================================
 
-from src.api.routers import health, recommendations, predictions, movies
+from src.api.routers import health, recommendations, predictions, movies, registry
 
 app.include_router(health.router)
 app.include_router(recommendations.router)
 app.include_router(predictions.router)
 app.include_router(movies.router)
+app.include_router(registry.router)
 
 
 # ============================================================
@@ -272,17 +286,22 @@ async def model_info():
     Get current model configuration and info.
     """
     from src.utils.config import (
-        N_FACTORS, N_EPOCHS, TRAIN_TEST_FOLD, MODEL_NAME,
-        TOTAL_USERS, TOTAL_MOVIES, SIM_N_FACTORS, SIM_N_EPOCHS
+        N_FACTORS, N_EPOCHS, MODEL_NAME,
+        TOTAL_USERS, TOTAL_MOVIES, SIM_N_FACTORS, SIM_N_EPOCHS,
+        get_fold_from_model_name, get_train_test_files_from_model_name
     )
     
     # Get engine info
     from src.api.services.recommendation_engine import get_engine
     engine = get_engine()
     
-    # Get train/test data info
+    # Xác định train/test file từ model_name
+    model_fold = get_fold_from_model_name(MODEL_NAME)
+    train_file, test_file, is_full_data = get_train_test_files_from_model_name(MODEL_NAME)
+    
+    # Get train data info
     from src.data.load import load_train_test_data
-    train_df, test_df = load_train_test_data(fold=TRAIN_TEST_FOLD)
+    train_df, test_df = load_train_test_data(model_name=MODEL_NAME)
     
     return {
         "model_name": MODEL_NAME,
@@ -291,7 +310,8 @@ async def model_info():
         "config": {
             "n_factors": N_FACTORS,
             "n_epochs": N_EPOCHS,
-            "train_test_fold": TRAIN_TEST_FOLD,
+            "train_test_fold": model_fold if model_fold > 0 else "ua/ub",
+            "is_full_data": is_full_data,
             "total_users": TOTAL_USERS,
             "total_movies": TOTAL_MOVIES,
             "sim_n_factors": SIM_N_FACTORS,
@@ -299,9 +319,10 @@ async def model_info():
         },
         "data": {
             "train_ratings": len(train_df),
-            "test_ratings": len(test_df),
-            "train_file": f"u{TRAIN_TEST_FOLD if TRAIN_TEST_FOLD > 0 else 'a'}.base",
-            "test_file": f"u{TRAIN_TEST_FOLD if TRAIN_TEST_FOLD > 0 else 'a'}.test"
+            "test_ratings": len(test_df) if test_df is not None else 0,
+            "train_file": train_file,
+            "test_file": test_file,
+            "is_full_data": is_full_data
         }
     }
 

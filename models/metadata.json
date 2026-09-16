@@ -1,0 +1,27 @@
+{
+  "current_production": "v1.0",
+  "models": {
+    "v1.0": {
+      "model_name": "svd_model_full",
+      "file_path": "models/svd_model_full.pkl",
+      "trained_at": "2026-09-14T17:35:00Z",
+      "status": "production",
+      "metrics": {
+        "rmse": 0.92,
+        "mae": 0.72
+      },
+      "hyperparameters": {
+        "n_factors": 100,
+        "n_epochs": 20,
+        "learning_rate": 0.005,
+        "reg_all": 0.02
+      },
+      "data": {
+        "train_file": "u.data",
+        "is_full_data": true,
+        "n_ratings": 100000
+      },
+      "description": "Initial SVD model trained on full MovieLens 100K"
+    }
+  }
+}

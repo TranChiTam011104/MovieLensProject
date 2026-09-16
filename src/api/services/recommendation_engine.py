@@ -43,9 +43,18 @@ class RecommendationEngine:
             model_path: Path to trained SVD model. If None, uses default path.
             model_name: Name for model file (without .pkl extension).
         """
+        from ...utils.config import MODEL_FILENAMES
+        
         self.model = None
         self._model_name = model_name or MODEL_NAME
-        self.model_path = model_path or (MODELS_DIR / f"{self._model_name}.pkl")
+        
+        # Use MODEL_FILENAMES mapping, fallback to model_name.pkl
+        if model_path is None:
+            filename = MODEL_FILENAMES.get(self._model_name, f"{self._model_name}.pkl")
+            self.model_path = MODELS_DIR / filename
+        else:
+            self.model_path = model_path
+        
         self._is_loaded = False
         
         # Data caches

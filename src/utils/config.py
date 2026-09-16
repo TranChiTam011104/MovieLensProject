@@ -112,16 +112,86 @@ MOVIES_COLUMNS = [
     "movie_id", "title", "release_date", "video_release_date", "IMDb_URL"
 ] + [f"genre_{i}" for i in range(19)]  # 19 genre flags
 
+# Columns cho users data
+USERS_COLUMNS = ["user_id", "age", "gender", "occupation", "zip_code"]
+
+# Genres list (theo thứ tự trong u.genre - genre_0 là unknown)
+GENRES_LIST = [
+    "unknown", "Action", "Adventure", "Animation", "Children's", "Comedy",
+    "Crime", "Documentary", "Drama", "Fantasy", "Film-Noir",
+    "Horror", "Musical", "Mystery", "Romance", "Sci-Fi",
+    "Thriller", "War", "Western"
+]
+
 # ============================================================
 # MODEL FILENAMES - Tên file model output
 # ============================================================
 
 MODEL_FILENAMES = {
-    "svd": "svd_model.pkl",
-    "knn_basic": "knn_basic_model.pkl",
-    "knn_means": "knn_means_model.pkl",
-    "baseline": "baseline_model.pkl",
+    "svd_model_full": "svd_model_full.pkl",
+    "svd_model_fold1": "svd_model_fold1.pkl",
+    "svd_model_fold2": "svd_model_fold2.pkl",
+    "svd_model_fold3": "svd_model_fold3.pkl",
+    "svd_model_fold4": "svd_model_fold4.pkl",
+    "svd_model_fold5": "svd_model_fold5.pkl",
+    "svd": "svd_model.pkl",  # fallback
 }
 
 # Metrics output file
 METRICS_FILE = "metrics.json"
+
+# Model registry metadata file
+METADATA_FILE = "metadata.json"
+
+
+# ============================================================
+# HELPER: Get fold from model name
+# ============================================================
+
+def get_fold_from_model_name(model_name: str) -> int:
+    """
+    Xác định fold từ model_name.
+    
+    Conventions:
+    - svd_model_full -> -1 (dùng u.data đầy đủ)
+    - svd_model_fold1, svd_model_fold2, ... -> 1, 2, ...
+    
+    Returns:
+        Fold number (1-5 for folds, -1 for full data, 0 for ua/ub split)
+    """
+    if model_name is None:
+        return -1
+    
+    model_lower = model_name.lower()
+    
+    if 'full' in model_lower:
+        return -1  # Full data (u.data)
+    
+    # Tìm fold number trong tên model
+    import re
+    match = re.search(r'fold(\d+)', model_lower)
+    if match:
+        return int(match.group(1))
+    
+    # Mặc định
+    return -1
+
+
+def get_train_test_files_from_model_name(model_name: str) -> tuple:
+    """
+    Lấy train/test file paths từ model_name.
+    
+    Returns:
+        Tuple (train_file, test_file, is_full_data)
+        - is_full_data=True nếu dùng u.data
+    """
+    fold = get_fold_from_model_name(model_name)
+    
+    if fold == -1:
+        # Full data
+        return ("u.data", None, True)
+    elif fold == 0:
+        return (SINGLE_TRAIN_FILE, SINGLE_TEST_FILE, False)
+    else:
+        idx = fold - 1
+        return (TRAIN_FILES[idx], TEST_FILES[idx], False)
