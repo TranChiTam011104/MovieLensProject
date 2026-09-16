@@ -58,7 +58,7 @@ env:
   PROJECT_ID: vsfintern
   REGION: us-central1
   SERVICE_NAME: movielens-api
-  IMAGE_NAME: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+  IMAGE_NAME: gcr.io/vsfintern/movielens-api
 
 # ============================================================
 # JOBS
@@ -126,20 +126,20 @@ jobs:
       - name: 🏗 Build Docker image
         run: |
           docker build \
-            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            -t ${{ env.IMAGE_NAME }}:latest \
+            -t gcr.io/vsfintern/movielens-api:${{ github.sha }} \
+            -t gcr.io/vsfintern/movielens-api:latest \
             .
 
       - name: 📤 Push to Container Registry
         run: |
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
+          docker push gcr.io/vsfintern/movielens-api:${{ github.sha }}
+          docker push gcr.io/vsfintern/movielens-api:latest
 
       - name: 🚀 Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE_NAME }}
-          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image: gcr.io/vsfintern/movielens-api:${{ github.sha }}
           region: ${{ env.REGION }}
           flags: |
             --port=8000
@@ -191,17 +191,17 @@ jobs:
       - name: 🏗 Build Docker image (canary)
         run: |
           docker build \
-            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t gcr.io/vsfintern/movielens-api:${{ github.sha }} \
             .
 
       - name: 📤 Push image
-        run: docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: docker push gcr.io/vsfintern/movielens-api:${{ github.sha }}
 
       - name: 🐤 Deploy canary revision
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE_NAME }}
-          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          image: gcr.io/vsfintern/movielens-api:${{ github.sha }}
           region: ${{ env.REGION }}
           flags: |
             --port=8000
