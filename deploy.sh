@@ -74,7 +74,7 @@ deploy_production() {
     gcloud config set project ${PROJECT_ID}
 
     echo "📦 Building Docker image..."
-    gcloud builds submit \
+    gcloud builds submit --no-stream \
         --tag ${IMAGE_NAME} \
         --timeout 10m
 
@@ -106,7 +106,7 @@ deploy_canary() {
     gcloud config set project ${PROJECT_ID}
 
     echo "📦 Building Docker image..."
-    gcloud builds submit \
+    gcloud builds submit --no-stream \
         --tag ${IMAGE_NAME}:canary \
         --timeout 10m
 
