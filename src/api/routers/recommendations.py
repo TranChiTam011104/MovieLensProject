@@ -8,7 +8,6 @@ ENDPOINTS:
 """
 
 from fastapi import APIRouter, HTTPException, Path, Query
-from typing import Optional
 
 # Import models
 from ..models import (
@@ -25,6 +24,12 @@ from ..models import (
 # Import services
 from ..services.recommendation_engine import get_engine
 from ..services.similarity_service import get_similarity_service
+
+# Import config
+from ...utils.config import TOTAL_USERS
+
+# Import shared utils
+from ..utils import get_all_ratings, get_actual_rating
 
 router = APIRouter(prefix="/v1", tags=["Recommendations"])
 
@@ -43,7 +48,7 @@ router = APIRouter(prefix="/v1", tags=["Recommendations"])
     }
 )
 async def get_recommendations(
-    user_id: int = Path(..., ge=1, le=943, description="User ID (1-943)"),
+    user_id: int = Path(..., ge=1, description=f"User ID (1-{TOTAL_USERS})"),
     n: int = Query(10, ge=1, le=50, description="Number of recommendations"),
     exclude_watched: bool = Query(True, description="Exclude movies user has rated"),
     min_rating: float = Query(0, ge=0, le=5, description="Minimum predicted rating")
@@ -72,7 +77,7 @@ async def get_recommendations(
     
     # Validate user exists (basic check)
     # In production, you'd query the database
-    if user_id < 1 or user_id > 943:
+    if user_id < 1 or user_id > TOTAL_USERS:
         raise HTTPException(
             status_code=404,
             detail=f"User with ID {user_id} does not exist"
@@ -87,17 +92,22 @@ async def get_recommendations(
             min_rating=min_rating
         )
         
+        # Get all ratings for actual_rating lookup (reuse same DataFrame)
+        all_ratings = get_all_ratings()
+        
         # Convert to response model
-        movie_recs = [
-            MovieRecommendation(
+        movie_recs = []
+        for rec in recommendations:
+            # Lookup actual rating
+            actual_rating = get_actual_rating(user_id, rec['movie_id'], all_ratings)
+            
+            movie_recs.append(MovieRecommendation(
                 movie_id=rec['movie_id'],
                 title=rec.get('title', 'Unknown'),
                 genres=rec.get('genres', []),
                 predicted_rating=round(rec['predicted_rating'], 2),
-                confidence=round(rec.get('confidence', 0.8), 2)
-            )
-            for rec in recommendations
-        ]
+                actual_rating=actual_rating
+            ))
         
         return RecommendationResponse(
             user_id=user_id,
@@ -246,7 +256,7 @@ async def get_similar_users(
         )
     
     # Validate user
-    if user_id < 1 or user_id > 943:
+    if user_id < 1 or user_id > TOTAL_USERS:
         raise HTTPException(
             status_code=404,
             detail=f"User with ID {user_id} does not exist"

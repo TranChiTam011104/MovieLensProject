@@ -16,6 +16,12 @@ from ..models import (
 # Import services
 from ..services.recommendation_engine import get_engine
 
+# Import config
+from ...utils.config import TOTAL_USERS, TOTAL_MOVIES
+
+# Import shared utils
+from ..utils import get_all_ratings, get_actual_rating
+
 router = APIRouter(prefix="/v1", tags=["Predictions"])
 
 
@@ -27,8 +33,8 @@ router = APIRouter(prefix="/v1", tags=["Predictions"])
     }
 )
 async def predict_rating(
-    user_id: int = Path(..., ge=1, le=943, description="User ID (1-943)"),
-    movie_id: int = Path(..., ge=1, description="Movie ID")
+    user_id: int = Path(..., ge=1, description=f"User ID (1-{TOTAL_USERS})"),
+    movie_id: int = Path(..., ge=1, description=f"Movie ID (1-{TOTAL_MOVIES})")
 ):
     """
     Predict how a user would rate a specific movie.
@@ -63,8 +69,8 @@ async def predict_rating(
             detail="Model not loaded. Please wait for initialization."
         )
     
-    # Validate user exists
-    if user_id < 1 or user_id > 943:
+    # Validate user exists (dùng config)
+    if user_id < 1 or user_id > TOTAL_USERS:
         raise HTTPException(
             status_code=404,
             detail=f"User with ID {user_id} does not exist"
@@ -72,14 +78,16 @@ async def predict_rating(
     
     try:
         # Predict rating
-        predicted_rating, confidence = engine.predict_rating(user_id, movie_id)
+        predicted_rating = engine.predict_rating(user_id, movie_id)
+        
+        # Get actual rating from u.data
+        actual_rating = get_actual_rating(user_id, movie_id)
         
         return PredictionResponse(
             user_id=user_id,
             movie_id=movie_id,
             predicted_rating=round(predicted_rating, 2),
-            confidence=round(confidence, 2),
-            actual_rating=None  # Would need to query DB for actual rating
+            actual_rating=actual_rating
         )
         
     except Exception as e:

@@ -12,7 +12,7 @@ THUẬT TOÁN: SVD (Singular Value Decomposition)
 """
 
 import numpy as np
-from typing import List, Tuple, Optional, Dict
+from typing import List, Optional, Dict
 import pandas as pd
 from pathlib import Path
 import os
@@ -22,7 +22,7 @@ from surprise import SVD, Dataset, Reader
 from surprise.model_selection import train_test_split
 
 # Config
-from ...utils.config import MODELS_DIR, MODEL_FILENAMES
+from ...utils.config import MODELS_DIR, MODEL_FILENAMES, TOTAL_USERS, TOTAL_MOVIES, MODEL_NAME
 
 
 class RecommendationEngine:
@@ -35,15 +35,26 @@ class RecommendationEngine:
     3. Compute item/user similarities
     """
     
-    def __init__(self, model_path: Path = None):
+    def __init__(self, model_path: Path = None, model_name: str = None):
         """
         Initialize recommendation engine.
         
         ARGS:
             model_path: Path to trained SVD model. If None, uses default path.
+            model_name: Name for model file (without .pkl extension).
         """
+        from ...utils.config import MODEL_FILENAMES
+        
         self.model = None
-        self.model_path = model_path or (MODELS_DIR / MODEL_FILENAMES["svd"])
+        self._model_name = model_name or MODEL_NAME
+        
+        # Use MODEL_FILENAMES mapping, fallback to model_name.pkl
+        if model_path is None:
+            filename = MODEL_FILENAMES.get(self._model_name, f"{self._model_name}.pkl")
+            self.model_path = MODELS_DIR / filename
+        else:
+            self.model_path = model_path
+        
         self._is_loaded = False
         
         # Data caches
@@ -128,7 +139,7 @@ class RecommendationEngine:
         """Check if model is loaded."""
         return self._is_loaded and self.model is not None
     
-    def predict_rating(self, user_id: int, movie_id: int) -> Tuple[float, float]:
+    def predict_rating(self, user_id: int, movie_id: int) -> float:
         """
         Predict rating for a user-movie pair.
         
@@ -137,8 +148,7 @@ class RecommendationEngine:
             movie_id: Movie ID
             
         RETURNS:
-            Tuple of (predicted_rating, confidence)
-            - confidence is estimated based on number of ratings
+            Predicted rating
         """
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load_model() or train() first.")
@@ -146,12 +156,7 @@ class RecommendationEngine:
         # Predict using SVD
         prediction = self.model.predict(user_id, movie_id)
         
-        # Estimate confidence (higher if user/item has more ratings)
-        # Simplified: use prediction.est as confidence proxy
-        # More sophisticated: compute based on variance of predictions
-        confidence = min(1.0, 0.5 + 0.1 * len(prediction.details)) if hasattr(prediction, 'details') else 0.8
-        
-        return prediction.est, confidence
+        return prediction.est
     
     def get_recommendations(
         self,
@@ -200,12 +205,11 @@ class RecommendationEngine:
         # Predict ratings for all candidate movies
         predictions = []
         for movie_id in all_movie_ids:
-            pred_rating, confidence = self.predict_rating(user_id, movie_id)
+            pred_rating = self.predict_rating(user_id, movie_id)
             if pred_rating >= min_rating:
                 predictions.append({
                     'movie_id': movie_id,
                     'predicted_rating': pred_rating,
-                    'confidence': confidence
                 })
         
         # Sort by predicted rating (descending)
@@ -276,39 +280,50 @@ class RecommendationEngine:
 _engine: Optional[RecommendationEngine] = None
 
 
-def get_engine() -> RecommendationEngine:
+def get_engine(model_name: str = None) -> RecommendationEngine:
     """
     Get or create global recommendation engine.
+    
+    ARGS:
+        model_name: Name for model file (without .pkl extension).
     
     RETURNS:
         RecommendationEngine singleton
     """
     global _engine
     if _engine is None:
-        _engine = RecommendationEngine()
+        _engine = RecommendationEngine(model_name=model_name)
     return _engine
 
 
-def load_engine(model_path: Path = None) -> bool:
+def load_engine(model_path: Path = None, model_name: str = None) -> bool:
     """
     Load the global recommendation engine.
+    
+    ARGS:
+        model_path: Optional custom path to model file.
+        model_name: Name for model file (without .pkl extension).
     
     RETURNS:
         True if loaded successfully
     """
     global _engine
     if _engine is None:
-        _engine = RecommendationEngine(model_path)
+        _engine = RecommendationEngine(model_path=model_path, model_name=model_name)
     return _engine.load_model()
 
 
-def train_engine(ratings_df: pd.DataFrame, **kwargs) -> RecommendationEngine:
+def train_engine(ratings_df: pd.DataFrame, model_name: str = None, **kwargs) -> RecommendationEngine:
     """
     Train and set global recommendation engine.
+    
+    ARGS:
+        ratings_df: Training data.
+        model_name: Name for model file (without .pkl extension).
     
     RETURNS:
         Trained RecommendationEngine
     """
     global _engine
-    _engine = RecommendationEngine()
+    _engine = RecommendationEngine(model_name=model_name)
     return _engine.train(ratings_df, **kwargs)

@@ -5,6 +5,7 @@ ENDPOINTS:
 - GET /health - Service health status
 """
 
+import os
 from fastapi import APIRouter
 
 # Import models
@@ -37,5 +38,6 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version=__version__,
-        timestamp=datetime.utcnow().isoformat() + "Z"
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        model_name=os.getenv("MODEL_NAME", "unknown_model")  # Đọc model name từ environment
     )
