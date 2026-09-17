@@ -43,6 +43,7 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status")
     version: str = Field(..., description="API version")
     timestamp: str = Field(..., description="Current server time")
+    model_version: str = Field(..., description="Model version")
 
 
 # ============================================================
