@@ -37,7 +37,6 @@ show_header() {
 }
 
 get_prod_revision() {
-    # Lấy revision mới nhất không gắn nhãn canary
     gcloud run revisions list \
         --service ${SERVICE_NAME} \
         --platform managed \
@@ -47,7 +46,6 @@ get_prod_revision() {
 }
 
 get_latest_canary_revision() {
-    # Tự động tìm revision Canary mới nhất dựa trên prefix can-
     gcloud run revisions list \
         --service ${SERVICE_NAME} \
         --platform managed \
@@ -78,13 +76,16 @@ deploy_production() {
     echo ""
 
     gcloud config set project ${PROJECT_ID}
-
     SUFFIX="prod-$(date +%s)"
-    echo "📦 Building Docker image with Cloud Build..."
-    # Đã bỏ --no-stream để tránh lỗi exit code 2
-    gcloud builds submit \
-        --tag ${IMAGE_NAME}:${SUFFIX} \
-        --timeout 10m
+
+    echo "🔑 Configuring Docker authentication for GCR..."
+    gcloud auth configure-docker --quiet
+
+    echo "📦 Building Docker image on CI runner..."
+    docker build -t ${IMAGE_NAME}:${SUFFIX} .
+
+    echo "📤 Pushing Docker image to Registry..."
+    docker push ${IMAGE_NAME}:${SUFFIX}
 
     echo ""
     echo "🚀 Deploying to Cloud Run (100% Traffic)..."
@@ -112,20 +113,19 @@ deploy_canary() {
     echo ""
 
     gcloud config set project ${PROJECT_ID}
-
-    # Sinh suffix động theo timestamp Unix để không bao giờ bị trùng tên
     SUFFIX="can-$(date +%s)"
 
-    echo "📦 Building Docker image with Cloud Build..."
-    # Đã bỏ --no-stream
-    gcloud builds submit \
-        --tag ${IMAGE_NAME}:${SUFFIX} \
-        --timeout 10m
+    echo "🔑 Configuring Docker authentication for GCR..."
+    gcloud auth configure-docker --quiet
+
+    echo "📦 Building Docker image on CI runner..."
+    docker build -t ${IMAGE_NAME}:${SUFFIX} .
+
+    echo "📤 Pushing Docker image to Registry..."
+    docker push ${IMAGE_NAME}:${SUFFIX}
 
     echo ""
     echo "🚀 Deploying canary revision (No traffic yet)..."
-    # Dùng --no-traffic để bản mới không tự ý cướp 100% traffic
-    # Gắn --tag canary để có thể test riêng qua canary--- URL
     gcloud run deploy ${SERVICE_NAME} \
         --image ${IMAGE_NAME}:${SUFFIX} \
         --platform managed \
