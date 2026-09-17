@@ -42,7 +42,7 @@ get_prod_revision() {
         --platform managed \
         --region ${REGION} \
         --format "value(metadata.name)" \
-        2>/dev/null | grep -v "can-" | head -1
+        2>/dev/null | grep -v "can-" | grep -v "canary" | head -1
 }
 
 get_latest_canary_revision() {
