@@ -4,7 +4,7 @@
 # Multi-stage build cho production deployment
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS base
 
 WORKDIR /app
 
@@ -33,8 +33,7 @@ ENV PATH=/root/.local/bin:$PATH
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
-COPY models/svd_model_full.pkl ./models/
-COPY models/metadata.json ./models/
+COPY models/ ./models/
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
