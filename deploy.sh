@@ -22,10 +22,6 @@ REGION=${GCP_REGION:-"us-central1"}
 SERVICE_NAME="movielens-api"
 IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 
-# Revision tracking (auto-detected via 'status' command)
-PROD_REV=""
-CANARY_REV="movielens-api--canary"
-
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
@@ -41,13 +37,23 @@ show_header() {
 }
 
 get_prod_revision() {
-    # Get latest non-canary revision (production)
+    # Lấy revision mới nhất không gắn nhãn canary
     gcloud run revisions list \
         --service ${SERVICE_NAME} \
         --platform managed \
         --region ${REGION} \
         --format "value(metadata.name)" \
-        2>/dev/null | grep -v canary | head -1
+        2>/dev/null | grep -v "can-" | head -1
+}
+
+get_latest_canary_revision() {
+    # Tự động tìm revision Canary mới nhất dựa trên prefix can-
+    gcloud run revisions list \
+        --service ${SERVICE_NAME} \
+        --platform managed \
+        --region ${REGION} \
+        --format "value(metadata.name)" \
+        2>/dev/null | grep "can-" | head -1
 }
 
 show_traffic_status() {
@@ -56,7 +62,7 @@ show_traffic_status() {
     gcloud run services describe ${SERVICE_NAME} \
         --platform managed \
         --region ${REGION} \
-        --format "table(status.traffic.percent,status.traffic.revisionName)" 2>/dev/null
+        --format "table(status.traffic.percent,status.traffic.revisionName,status.traffic.tag)" 2>/dev/null
     echo ""
     echo "Service URL: https://movielens-api-366360236110.us-central1.run.app"
 }
@@ -73,15 +79,17 @@ deploy_production() {
 
     gcloud config set project ${PROJECT_ID}
 
-    echo "📦 Building Docker image..."
-    gcloud builds submit --no-stream \
-        --tag ${IMAGE_NAME} \
+    SUFFIX="prod-$(date +%s)"
+    echo "📦 Building Docker image with Cloud Build..."
+    # Đã bỏ --no-stream để tránh lỗi exit code 2
+    gcloud builds submit \
+        --tag ${IMAGE_NAME}:${SUFFIX} \
         --timeout 10m
 
     echo ""
-    echo "🚀 Deploying to Cloud Run..."
+    echo "🚀 Deploying to Cloud Run (100% Traffic)..."
     gcloud run deploy ${SERVICE_NAME} \
-        --image ${IMAGE_NAME} \
+        --image ${IMAGE_NAME}:${SUFFIX} \
         --platform managed \
         --region ${REGION} \
         --port 8000 \
@@ -90,8 +98,8 @@ deploy_production() {
         --min-instances 0 \
         --max-instances 10 \
         --allow-unauthenticated \
-        --set-env-vars "PYTHONUNBUFFERED=1" \
-        --set-env-vars "LOG_LEVEL=INFO"
+        --revision-suffix="${SUFFIX}" \
+        --set-env-vars "PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_full"
 
     echo ""
     echo "✅ Production deployed successfully!"
@@ -105,15 +113,21 @@ deploy_canary() {
 
     gcloud config set project ${PROJECT_ID}
 
-    echo "📦 Building Docker image..."
-    gcloud builds submit --no-stream \
-        --tag ${IMAGE_NAME}:canary \
+    # Sinh suffix động theo timestamp Unix để không bao giờ bị trùng tên
+    SUFFIX="can-$(date +%s)"
+
+    echo "📦 Building Docker image with Cloud Build..."
+    # Đã bỏ --no-stream
+    gcloud builds submit \
+        --tag ${IMAGE_NAME}:${SUFFIX} \
         --timeout 10m
 
     echo ""
-    echo "🚀 Deploying canary revision..."
+    echo "🚀 Deploying canary revision (No traffic yet)..."
+    # Dùng --no-traffic để bản mới không tự ý cướp 100% traffic
+    # Gắn --tag canary để có thể test riêng qua canary--- URL
     gcloud run deploy ${SERVICE_NAME} \
-        --image ${IMAGE_NAME}:canary \
+        --image ${IMAGE_NAME}:${SUFFIX} \
         --platform managed \
         --region ${REGION} \
         --port 8000 \
@@ -122,13 +136,14 @@ deploy_canary() {
         --min-instances 0 \
         --max-instances 5 \
         --allow-unauthenticated \
-        --revision-suffix="-canary" \
-        --set-env-vars "MODEL_NAME=svd_model_fold5" \
-        --set-env-vars "PYTHONUNBUFFERED=1" \
-        --set-env-vars "LOG_LEVEL=INFO"
+        --revision-suffix="${SUFFIX}" \
+        --tag canary \
+        --no-traffic \
+        --set-env-vars "PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_fold5"
 
     echo ""
-    echo "✅ Canary deployed successfully!"
+    echo "✅ Canary deployed successfully! (Current Revision: ${SERVICE_NAME}-${SUFFIX})"
+    echo "🔗 Test Canary private URL: https://canary---movielens-api-366360236110.us-central1.run.app"
 }
 
 # ============================================================
@@ -138,14 +153,21 @@ deploy_canary() {
 split_traffic() {
     local CANARY_PERCENT=${1:-10}
     PROD_REV=$(get_prod_revision)
+    CANARY_REV=$(get_latest_canary_revision)
 
     if [ -z "$PROD_REV" ]; then
         echo "❌ No production revision found!"
-        echo "   Run: ./deploy.sh production first"
         exit 1
     fi
 
-    echo "🔀 Setting traffic split: $((100 - CANARY_PERCENT))% prod / ${CANARY_PERCENT}% canary"
+    if [ -z "$CANARY_REV" ]; then
+        echo "❌ No canary revision found! Run ./deploy.sh canary first."
+        exit 1
+    fi
+
+    local PROD_PERCENT=$((100 - CANARY_PERCENT))
+
+    echo "🔀 Setting traffic split: ${PROD_PERCENT}% prod / ${CANARY_PERCENT}% canary"
     echo "   Production: ${PROD_REV}"
     echo "   Canary:     ${CANARY_REV}"
     echo ""
@@ -153,14 +175,21 @@ split_traffic() {
     gcloud run services update-traffic ${SERVICE_NAME} \
         --platform managed \
         --region ${REGION} \
-        --to-revisions "${PROD_REV}=$((100 - CANARY_PERCENT)),${CANARY_REV}=${CANARY_PERCENT}"
+        --to-revisions "${PROD_REV}=${PROD_PERCENT},${CANARY_REV}=${CANARY_PERCENT}"
 
     echo ""
     show_traffic_status
 }
 
 promote_canary() {
-    echo "🚀 Promoting CANARY to 100% traffic..."
+    CANARY_REV=$(get_latest_canary_revision)
+
+    if [ -z "$CANARY_REV" ]; then
+        echo "❌ No canary revision found to promote!"
+        exit 1
+    fi
+
+    echo "🚀 Promoting CANARY (${CANARY_REV}) to 100% traffic..."
     echo ""
 
     gcloud run services update-traffic ${SERVICE_NAME} \
@@ -177,12 +206,12 @@ rollback_canary() {
     PROD_REV=$(get_prod_revision)
 
     if [ -z "$PROD_REV" ]; then
-        echo "❌ No production revision found!"
+        echo "❌ No production revision found to rollback!"
         exit 1
     fi
 
     echo "🔙 Rolling back to 100% production..."
-    echo "   Revision: ${PROD_REV}"
+    echo "   Target Revision: ${PROD_REV}"
     echo ""
 
     gcloud run services update-traffic ${SERVICE_NAME} \
@@ -219,35 +248,17 @@ show_logs() {
     fi
 }
 
-# ============================================================
-# MAIN DISPATCHER
-# ============================================================
-
 show_help() {
     echo "Usage: $0 <command> [options]"
     echo ""
-    echo "Deployment Commands:"
-    echo "  production              Deploy v1.0 to production"
-    echo "  canary                  Deploy v2.0 as canary revision"
-    echo ""
-    echo "Traffic Management:"
-    echo "  split [percent]         Set canary traffic % (default: 10)"
-    echo "  promote                 Promote canary to 100% traffic"
-    echo "  rollback                Rollback to 100% production"
-    echo ""
-    echo "Monitoring:"
-    echo "  status                  Show current traffic distribution"
-    echo "  logs [revision]         Show recent logs (optional: specific revision)"
-    echo ""
-    echo "Examples:"
-    echo "  $0 production           # Deploy v1.0"
-    echo "  $0 canary               # Deploy v2.0 as canary"
-    echo "  $0 split 10             # 90% prod, 10% canary"
-    echo "  $0 split 25             # 75% prod, 25% canary"
-    echo "  $0 promote              # Promote canary to 100%"
-    echo "  $0 rollback             # Rollback to production"
-    echo "  $0 status               # View traffic split"
-    echo "  $0 logs movielens-api--canary  # Logs for canary revision"
+    echo "Commands:"
+    echo "  production          Deploy v1.0 and allocate 100% traffic"
+    echo "  canary              Deploy v2.0 as canary (0% traffic, has private tag)"
+    echo "  split [percent]     Split traffic (e.g. 10 -> 90% prod / 10% canary)"
+    echo "  promote             Give 100% traffic to current canary revision"
+    echo "  rollback            Revert 100% traffic back to latest production revision"
+    echo "  status              View current traffic split"
+    echo "  logs [revision]     View execution logs"
 }
 
 case "$1" in
@@ -277,7 +288,6 @@ case "$1" in
         ;;
     *)
         echo "❌ Unknown command: $1"
-        echo ""
         show_help
         exit 1
         ;;

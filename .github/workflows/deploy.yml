@@ -21,11 +21,11 @@ on:
       - 'requirements.txt'
       - 'Dockerfile'
       - '.github/workflows/**'
-  
+
   pull_request:
     branches:
       - main
-  
+
   workflow_dispatch:
     inputs:
       action:
@@ -38,18 +38,19 @@ on:
           - promote-canary
           - rollback-canary
           - set-traffic
-        environment_name:
-          description: 'GitHub Actions environment'
-          required: true
-          type: choice
-          default: 'vsfintern-gcp'
-          options:
-            - vsfintern-gcp
-        traffic_percent:
-          description: 'Canary traffic % (for set-traffic)'
-          required: false
-          type: string
-          default: '10'
+      environment_name:
+        description: 'GitHub Actions environment'
+        required: true
+        type: choice
+        default: 'production'
+        options:
+          - production
+          - canary
+      traffic_percent:
+        description: 'Canary traffic % (for set-traffic)'
+        required: false
+        type: string
+        default: '10'
 
 # ============================================================
 # ENVIRONMENT VARIABLES
@@ -66,12 +67,12 @@ env:
 jobs:
 
   # ----------------------------------------------------------
-  # JOB 1: Test & Lint (chạy trên PR và push)
+  # JOB 1: Test & Lint (Chạy trên PR và mọi Push)
   # ----------------------------------------------------------
   test:
     name: 🧪 Test & Lint
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -86,7 +87,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+          test -f requirements-dev.txt && pip install -r requirements-dev.txt || true
 
       - name: 🔍 Lint with flake8
         run: |
@@ -97,7 +98,7 @@ jobs:
           pytest tests/ -v --tb=short
 
   # ----------------------------------------------------------
-  # JOB 2: Deploy Production (chỉ khi push main)
+  # JOB 2: Deploy Production (Khi push main)
   # ----------------------------------------------------------
   deploy-production:
     name: 🚀 Deploy Production
@@ -107,7 +108,7 @@ jobs:
     environment:
       name: production
       url: https://movielens-api-366360236110.us-central1.run.app
-    
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -123,46 +124,42 @@ jobs:
       - name: 📦 Configure Docker for GCR
         run: gcloud auth configure-docker --quiet
 
-      - name: 🏗 Build Docker image
+      - name: 🏗 Build & Push Docker image
         run: |
           docker build \
-            -t gcr.io/vsfintern/movielens-api:${{ github.sha }} \
-            -t gcr.io/vsfintern/movielens-api:latest \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.IMAGE_NAME }}:latest \
             .
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
 
-      - name: 📤 Push to Container Registry
+      - name: 🚀 Deploy to Cloud Run (100% Traffic)
         run: |
-          docker push gcr.io/vsfintern/movielens-api:${{ github.sha }}
-          docker push gcr.io/vsfintern/movielens-api:latest
-
-      - name: 🚀 Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          image: gcr.io/vsfintern/movielens-api:${{ github.sha }}
-          region: ${{ env.REGION }}
-          flags: |
-            --port=8000
-            --memory=512Mi
-            --cpu=1
-            --min-instances=0
-            --max-instances=10
-            --allow-unauthenticated
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --port=8000 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --allow-unauthenticated \
+            --revision-suffix="prod-${SHORT_SHA}" \
             --set-env-vars=PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_full
 
-      - name: ✅ Smoke test
+      - name: ✅ Smoke test Production
         run: |
           sleep 10
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            https://movielens-api-366360236110.us-central1.run.app/health)
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://movielens-api-366360236110.us-central1.run.app/health)
           if [ "$response" != "200" ]; then
             echo "❌ Health check failed! Status: $response"
             exit 1
           fi
-          echo "✅ Health check passed!"
+          echo "✅ Production Health check passed!"
 
   # ----------------------------------------------------------
-  # JOB 3: Deploy Canary (chỉ khi push feature branch)
+  # JOB 3: Deploy Canary (Khi push feature branch)
   # ----------------------------------------------------------
   deploy-canary:
     name: 🐤 Deploy Canary
@@ -171,8 +168,8 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
     environment:
       name: canary
-      url: https://movielens-api-366360236110.us-central1.run.app
-    
+      url: https://canary---movielens-api-366360236110.us-central1.run.app
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -188,61 +185,64 @@ jobs:
       - name: 📦 Configure Docker for GCR
         run: gcloud auth configure-docker --quiet
 
-      - name: 🏗 Build Docker image (canary)
+      - name: 🏗 Build & Push Docker image
         run: |
-          docker build \
-            -t gcr.io/vsfintern/movielens-api:${{ github.sha }} \
-            .
+          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      - name: 📤 Push image
-        run: docker push gcr.io/vsfintern/movielens-api:${{ github.sha }}
-
-      - name: 🐤 Deploy canary revision
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          image: gcr.io/vsfintern/movielens-api:${{ github.sha }}
-          region: ${{ env.REGION }}
-          flags: |
-            --port=8000
-            --memory=512Mi
-            --cpu=1
-            --min-instances=0
-            --max-instances=5
-            --allow-unauthenticated
-            --revision-suffix=-canary
+      - name: 🐤 Deploy Canary Revision (Chưa nhận traffic chính)
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --port=8000 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=5 \
+            --allow-unauthenticated \
+            --revision-suffix="can-${SHORT_SHA}" \
+            --tag=canary \
+            --no-traffic \
             --set-env-vars=PYTHONUNBUFFERED=1,LOG_LEVEL=INFO,MODEL_NAME=svd_model_fold5
+
+      - name: ✅ Smoke test Targeted Canary Revision
+        run: |
+          sleep 10
+          # Test trực tiếp vào URL định danh riêng của tag canary, tránh ăn nhầm bản Prod
+          CANARY_URL="https://canary---movielens-api-366360236110.us-central1.run.app/health"
+          for i in 1 2 3 4 5; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" "$CANARY_URL")
+            if [ "$response" == "200" ]; then
+              echo "✅ Canary private health check passed!"
+              break
+            fi
+            echo "⏳ Attempt $i failed (status: $response), retrying in 5s..."
+            sleep 5
+            if [ $i -eq 5 ]; then
+              echo "❌ Canary private health check failed!"
+              exit 1
+            fi
+          done
 
       - name: 🔀 Set traffic split (90% prod / 10% canary)
         run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          CANARY_REV="${{ env.SERVICE_NAME }}-can-${SHORT_SHA}"
+          
+          # Lấy revision Production ổn định gần nhất (bỏ qua các rev canary)
           PROD_REV=$(gcloud run revisions list \
             --service=${{ env.SERVICE_NAME }} \
-            --platform=managed \
             --region=${{ env.REGION }} \
-            --format="value(metadata.name)" | grep -v canary | head -1)
-          
-          echo "Production revision: $PROD_REV"
-          
-          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
-            --platform=managed \
-            --region=${{ env.REGION }} \
-            --to-revisions="${PROD_REV}=90,${{ env.SERVICE_NAME }}-canary=10"
+            --format="value(metadata.name)" | grep -v "can-" | head -1)
 
-      - name: ✅ Smoke test canary
-        run: |
-          sleep 10
-          for i in 1 2 3 4 5; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" \
-              https://movielens-api-366360236110.us-central1.run.app/health)
-            if [ "$response" == "200" ]; then
-              echo "✅ Canary is healthy!"
-              exit 0
-            fi
-            echo "⏳ Attempt $i failed (status: $response), retrying..."
-            sleep 5
-          done
-          echo "❌ Canary health check failed!"
-          exit 1
+          echo "Target Prod: $PROD_REV"
+          echo "Target Canary: $CANARY_REV"
+
+          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --to-revisions="${PROD_REV}=90,${CANARY_REV}=10"
 
   # ----------------------------------------------------------
   # JOB 4: Manual Operations (promote/rollback/set-traffic)
@@ -288,7 +288,7 @@ jobs:
               ;;
             set-traffic)
               echo "Setting canary traffic to ${TRAFFIC_PERCENT}%..."
-              ./deploy.sh split $TRAFFIC_PERCENT
+              ./deploy.sh split "$TRAFFIC_PERCENT"
               ;;
             *)
               echo "Unknown action: $ACTION"
